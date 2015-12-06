@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+
+   <extension
+         point="org.eclipse.ui.newWizards">
+      <category
+            name="Nikitenko Gleb"
+            id="ru.nikitenkogleb.wizards.android.app">
+      </category>
+      <wizard
+            name="New Android Application"
+            icon="icons/android_app.gif"
+            category="ru.nikitenkogleb.wizards.android.app"
+            class="ru.nikitenkogleb.wizards.android.app.EmptyAppWizard"
+            id="ru.nikitenkogleb.wizards.android.app.EmptyAppWizard">
+      </wizard>
+   </extension>
+
+</plugin>
