@@ -1,7 +1,7 @@
-Manifest-Version: 2.0
-Bundle-ManifestVersion: 2
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 1
 Bundle-Name: Android App Wizard Plugin
-Bundle-SymbolicName: ru.nikitenkogleb.wizards.android.app;singleton:=true
+Bundle-SymbolicName: ru.nikitenkogleb.wizards.android.app;singleton=true
 Bundle-Version: 1.0.0
 Bundle-Activator: ru.nikitenkogleb.wizards.android.app.Activator
 Bundle-Vendor: Nikitenko Gleb

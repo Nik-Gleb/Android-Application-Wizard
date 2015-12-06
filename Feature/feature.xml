@@ -22,14 +22,14 @@
    </license>
 
    <url>
-      <update label="Android App Wizard Update Site" url="http://nikitenkogleb.royalwebhosting.net/updatesite"/>
+      <update label="Android Application Wizard" url="http://nikitenkogleb.royalwebhosting.net/updatesite"/>
    </url>
 
    <plugin
          id="ru.nikitenkogleb.wizards.android.app"
-         download-size="0"
-         install-size="0"
-         version="1.0.0"
+         download-size="108"
+         install-size="108"
+         version="0.0.0"
          unpack="false"/>
 
 </feature>

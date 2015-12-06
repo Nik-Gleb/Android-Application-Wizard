@@ -5,15 +5,18 @@
    <extension
          point="org.eclipse.ui.newWizards">
       <category
-            name="Nikitenko Gleb"
-            id="ru.nikitenkogleb.wizards.android.app">
+            id="ru.nikitenkogleb.wizards.android.app"
+            name="Nikitenko Gleb">
       </category>
       <wizard
-            name="New Android Application"
-            icon="icons/android_app.gif"
             category="ru.nikitenkogleb.wizards.android.app"
             class="ru.nikitenkogleb.wizards.android.app.EmptyAppWizard"
-            id="ru.nikitenkogleb.wizards.android.app.EmptyAppWizard">
+            descriptionImage="icons/android_app.png"
+            finalPerspective="org.eclipse.jdt.ui.JavaPerspective"
+            icon="icons/android_app.gif"
+            id="ru.nikitenkogleb.wizards.android.app.EmptyAppWizard"
+            name="New Android Application"
+            project="true">
       </wizard>
    </extension>
 

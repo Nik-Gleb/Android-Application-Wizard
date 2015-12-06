@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <site>
-   <description name="Android App Wizard Update Site" url="http://nikitenkogleb.royalwebhosting.net/updatesite">
+   <description name="Android Application Wizard" url="http://nikitenkogleb.royalwebhosting.net/updatesite">
       Home Update Site. For store custom eclipse plugins.
    </description>
    <feature url="features/ru.nikitenkogleb.wizards.android.app_1.0.0.jar" id="ru.nikitenkogleb.wizards.android.app" version="1.0.0">
