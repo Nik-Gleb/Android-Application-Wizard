@@ -209,36 +209,20 @@ IExecutableExtension {
 			}
 		};
 		
-		
 		wizardPage.setTitle("New Android Application");
 		wizardPage.setInitialProjectName("MyApplication");
-		//wizardPage.setDescription("This wizard creates a new empty Android Application.\nAlso you can specify existing GIT-repository for CVS-integration.");
+		wizardPage.setDescription("This wizard creates a new empty Android Application.\nAlso you can specify existing GIT-repository for CVS-integration.");
 		wizardPage.setImageDescriptor(ResourceManager.getPluginImageDescriptor("ru.nikitenkogleb.wizards.android.app", "icons/android_app.png"));
 		
 		addPage(wizardPage);
 		
-		/*try {
+		try {
 			mCloneBatFile = FileLocator.toFileURL(this.getClass()
 					.getResource("files/clone.bat")).getFile().substring(1);
 			mCommitBatFile = FileLocator.toFileURL(this.getClass()
 					.getResource("files/commit.bat")).getFile().substring(1);
-		} catch (IOException e) {e.printStackTrace();}*/
+		} catch (IOException e) {e.printStackTrace();}
 		
-		//ResourceManager.getPluginFile("files/classpath");
-		final URL url1 = Activator.getDefault().getBundle().getResource("readme.txt");
-		final URL url2 = Activator.getDefault().getBundle().getEntry("readme.txt");
-		final URL url3 = this.getClass().getResource("readme.txt");
-		final URL url4 = Platform.getBundle("ru.nikitenkogleb.wizards.android.app").getEntry("readme.txt");
-		final URL url5 = Platform.getBundle("ru.nikitenkogleb.wizards.android.app").getResource("readme.txt");
-		
-		final String msg1 = url1 != null ? url1.toString() : "null";
-		final String msg2 = url2 != null ? url2.toString() : "null";
-		final String msg3 = url3 != null ? url3.toString() : "null";
-		final String msg4 = url4 != null ? url3.toString() : "null";
-		final String msg5 = url5 != null ? url3.toString() : "null";
-		wizardPage.setDescription(msg1 + "\n" + msg2 + "\n" + msg3 + "\n" + msg4 + "\n" + msg5);
-		
-		MessageDialog.openError(getShell(), "Error", msg1 + "\n" + msg2 + "\n" + msg3 + "\n" + msg4 + "\n" + msg5);
 	}
 		
 	/**
@@ -373,14 +357,11 @@ IExecutableExtension {
 			proj.open(IResource.BACKGROUND_REFRESH, new SubProgressMonitor(
 					monitor, 1000));
 			
-			//try {proj.setDefaultCharset("UTF-8", monitor);}
-			//catch (CoreException e) {e.printStackTrace();}
+			try {proj.setDefaultCharset("UTF-8", monitor);}
+			catch (CoreException e) {e.printStackTrace();}
 			
 			if (monitor.isCanceled())
 				throw new OperationCanceledException();
-			
-			/*if (monitor != null)
-				throw new RuntimeException("My Exception");*/
 			
 			/*
 			 * Okay, now we have the project and we can do more things with it
@@ -464,11 +445,11 @@ IExecutableExtension {
 					inputStream, monitor);
 			inputStream.close();
 			
-			/*inputStream = this.getClass().getResourceAsStream("files/.settings/org.eclipse.core.runtime.prefs");
+			inputStream = this.getClass().getResourceAsStream("files/.settings/org.eclipse.core.runtime.prefs");
 			addFileToProject(container, new Path(settingsFolder.getName()
 					+ Path.SEPARATOR + "org.eclipse.core.runtime.prefs"),
 					inputStream, monitor);
-			inputStream.close();*/
+			inputStream.close();
 			
 			inputStream = this.getClass().getResourceAsStream("files/gitignore");
 			addFileToProject(container, new Path(".gitignore"), inputStream, monitor);
@@ -685,7 +666,7 @@ IExecutableExtension {
 		} catch (Exception ioe) {
 			IStatus status = new Status(IStatus.ERROR, "ru.nikitenkogleb.wizards.android.app", IStatus.OK,
 					ioe.getMessage(), ioe);
-			throw new RuntimeException(ioe);
+			throw new CoreException(status);
 		} finally {
 			monitor.done();
 		}
