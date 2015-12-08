@@ -11,9 +11,6 @@
 package org.eclipse.wb.swt;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
@@ -23,7 +20,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
-import org.eclipse.core.runtime.FileLocator;
 import org.eclipse.core.runtime.Platform;
 import org.eclipse.jface.resource.CompositeImageDescriptor;
 import org.eclipse.jface.resource.ImageDescriptor;
@@ -400,37 +396,6 @@ public class ResourceManager extends SWTResourceManager {
 				return (URL) findMethod.invoke(plugin, new Object[]{path});
 			}
 		}
-		return null;
-	}
-	
-	public static final InputStream getPluginFile(String path) {
-		final String packageName = "ru.nikitenkogleb.wizards.android.app";
-		final Bundle bundle = Platform.getBundle(packageName);
-		
-		URL file = null;
-		
-		if (bundle != null) {
-			file = bundle.getEntry(path);
-			//return null;
-			System.out.println("URL FILE1 = " + file);
-		}
-			
-		if (m_designTimePluginResourceProvider != null) {
-			file = m_designTimePluginResourceProvider.getEntry(packageName, path);
-			//return null;
-			System.out.println("URL FILE2 = " + file);
-		}
-		
-		/*if (file == null) return null;
-		URL url = null;
-		try {url = FileLocator.toFileURL(file);}
-		catch (IOException e) {e.printStackTrace(); return null;}
-		System.out.println(url);
-		try {return url.openStream();}
-		catch (IOException e) {e.printStackTrace();}*/
-		
-		
-		
 		return null;
 	}
 	

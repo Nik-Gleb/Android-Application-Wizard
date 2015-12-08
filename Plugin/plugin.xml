@@ -1,23 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <?eclipse version="3.4"?>
 <plugin>
-
-   <extension
-         point="org.eclipse.ui.newWizards">
+   <extension point="org.eclipse.ui.newWizards">
       <category
-            id="ru.nikitenkogleb.wizards.android.app"
-            name="Nikitenko Gleb">
-      </category>
+      		id="ru.nikitenkogleb.androidtools"
+            name="Android Tools"/>
       <wizard
-            category="ru.nikitenkogleb.wizards.android.app"
-            class="ru.nikitenkogleb.wizards.android.app.EmptyAppWizard"
+      		id="ru.nikitenkogleb.androidtools.newappwizard"
+            name="New Android Application"
+            category="ru.nikitenkogleb.androidtools"
+            class="ru.nikitenkogleb.androidtools.newappwizard.EmptyAppWizard"
             descriptionImage="icons/android_app.png"
             finalPerspective="org.eclipse.jdt.ui.JavaPerspective"
             icon="icons/android_app.gif"
-            id="ru.nikitenkogleb.wizards.android.app.EmptyAppWizard"
-            name="New Android Application"
-            project="true">
-      </wizard>
+            project="true"/>
    </extension>
-
 </plugin>

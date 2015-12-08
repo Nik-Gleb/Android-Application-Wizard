@@ -1,4 +1,4 @@
-package ru.nikitenkogleb.wizards.android.app;
+package ru.nikitenkogleb.androidtools.newappwizard;
 
 import org.eclipse.jface.viewers.IStructuredSelection;
 import org.eclipse.jface.wizard.Wizard;
@@ -40,7 +40,6 @@ import java.io.*;
 import org.eclipse.ui.wizards.newresource.BasicNewProjectResourceWizard;
 import org.eclipse.wb.swt.ResourceManager;
 
-import ru.nikitenkogleb.androidtools.newappwizard.Activator;
 import ru.nikitenkogleb.wizards.android.app.root.ResourcesRoot;
 
 /**
@@ -218,8 +217,9 @@ IExecutableExtension {
 		wizardPage.setImageDescriptor(ResourceManager.getPluginImageDescriptor("ru.nikitenkogleb.wizards.android.app", "icons/android_app.png"));
 		
 		addPage(wizardPage);
-		
-		System.out.println(Activator.getDefault().getBundle().getLocation());
+		Activator.getDefault().setDebugging(false);
+		System.out.println(Activator.getDefault().getBundle().getResource("files"));
+		Activator.getDefault().getBundle().getEntryPaths("/");
 		
 	}
 		
