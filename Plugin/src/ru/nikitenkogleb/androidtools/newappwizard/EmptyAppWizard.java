@@ -1,6 +1,5 @@
 package ru.nikitenkogleb.androidtools.newappwizard;
 
-import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.jface.viewers.IStructuredSelection;
 import org.eclipse.jface.wizard.Wizard;
 import org.eclipse.swt.SWT;
@@ -46,7 +45,6 @@ import org.eclipse.core.resources.*;
 import java.io.*;
 
 import org.eclipse.ui.wizards.newresource.BasicNewProjectResourceWizard;
-//import org.eclipse.wb.swt.ResourceManager;
 
 import ru.nikitenkogleb.wizards.android.app.root.ResourcesRoot;
 
@@ -65,7 +63,6 @@ import ru.nikitenkogleb.wizards.android.app.root.ResourcesRoot;
 public class EmptyAppWizard extends Wizard implements INewWizard,
 IExecutableExtension {
 	
-	
 	/**	Standard Android build commands for buildSpec */
 	private static final String[] BUILD_COMMANDS = new String[] {
 			"com.android.ide.eclipse.adt.ResourceManagerBuilder",
@@ -73,14 +70,16 @@ IExecutableExtension {
 			"org.eclipse.jdt.core.javabuilder",
 			"com.android.ide.eclipse.adt.ApkBuilder"
 	};
-	
 	/**	Standard Android natures */
 	private static final String[] NATURES = new String[] {
 			"com.android.ide.eclipse.adt.AndroidNature",
 			"org.eclipse.jdt.core.javanature"
 	};
 	
-	/**	String preffix for temp project directory. */
+	/**	The name of plugin console for outputs. */
+	private static final String PLUGIN_CONSOLE_NAME = "System Output";
+	
+	/**	String prefix for temp project directory. */
 	private static final String TEMP_PREFFIX = "_temp";
 	
 	/**	Android list targets command line */
@@ -119,6 +118,8 @@ IExecutableExtension {
 	private Text packageNameText = null;
 	private Text gitRepositoryText = null;
 	private Combo targetApiCombo = null;
+
+	private MessageConsoleStream mMessageConsoleStream;
 	
 	/**	Project name key */
 	private static final String KEY_PROJECT_NAME = "projectName";
@@ -140,7 +141,14 @@ IExecutableExtension {
 	private static final String KEY_DATE = "date";
 
 	/** Constructor for EmptyAppWizard. */
-	public EmptyAppWizard() {super();}
+	public EmptyAppWizard() {
+		super();
+		final MessageConsole messageConsole =
+				findConsole(PLUGIN_CONSOLE_NAME);
+		if (messageConsole != null)
+			mMessageConsoleStream =
+			messageConsole.newMessageStream();
+	}
 	
 	/** Adding the page to the wizard. */
 	public void addPages() {
@@ -149,7 +157,7 @@ IExecutableExtension {
 		 * Unlike the custom new wizard, we just add the pre-defined one and
 		 * don't necessarily define our own.
 		 */
-		wizardPage = new WizardNewProjectCreationPage("NewExampleComSiteProject") {
+		wizardPage = new WizardNewProjectCreationPage("New Android Application") {
 			@Override
 			public void createControl(Composite parent) {
 				super.createControl(parent);
@@ -199,8 +207,8 @@ IExecutableExtension {
 				pasteFromClipboardButton.setText("Paste from &clipboard");
 				pasteFromClipboardButton.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, false, false, 1, 1));
 				
-				// TODO Replace to Bungle
-				//pasteFromClipboardButton.setImage(ResourceManager.getPluginImage("ru.nikitenkogleb.wizards.android.app", "icons/paste.png"));
+				pasteFromClipboardButton.setImage(Activator
+						.getImageDescriptor("paste.png").createImage());
 				final Clipboard cb = new Clipboard(getShell().getDisplay());
 				pasteFromClipboardButton.addSelectionListener(new SelectionAdapter() {
 					@Override
@@ -223,26 +231,21 @@ IExecutableExtension {
 		
 		wizardPage.setTitle("New Android Application");
 		wizardPage.setInitialProjectName("MyApplication");
-		wizardPage.setDescription("This wizard creates a new empty Android Application.\nAlso you can specify existing GIT-repository for CVS-integration.");
-		
-		// TODO Remove it
-		//wizardPage.setImageDescriptor(ResourceManager.getPluginImageDescriptor("ru.nikitenkogleb.wizards.android.app", "icons/android_app.png"));
-		wizardPage.setImageDescriptor(ImageDescriptor.createFromURL(Activator.getDefault().getBundle().getResource("icons/android_app.png")));
+		wizardPage.setDescription("This wizard creates a new empty Android Application.\n" +
+				"Also you can specify existing GIT-repository for CVS-integration.");
+		wizardPage.setImageDescriptor(Activator.getImageDescriptor("android_app.png"));
 		addPage(wizardPage);
+		
+		// XXX It really necessary?
 		//Activator.getDefault().setDebugging(false);
 		
-		
-		final MessageConsole messageConsole = findConsole("System Output");
-		final MessageConsoleStream messageConsoleStream = messageConsole.newMessageStream();
-	
-		messageConsoleStream.println(Activator.getDefault().getBundle().getResource("files").toString());
+		// TODO Remove this tests
+		mMessageConsoleStream.println(Activator.getDefault().getBundle().getResource("files").toString());
 		final Enumeration<String> files = Activator.getDefault().getBundle().getEntryPaths("/files/");
 		
 		while(files.hasMoreElements())
-			messageConsoleStream.println((String) files.nextElement());
+			mMessageConsoleStream.println((String) files.nextElement());
 		
-		try {messageConsoleStream.close();}
-		catch (IOException e) {e.printStackTrace();}
 	}
 		
 	/**
@@ -282,6 +285,7 @@ IExecutableExtension {
 		updateStatus(null);
 	}
 
+	/** @param message for update wizard status */
 	private void updateStatus(String message) {
 		wizardPage.setErrorMessage(message);
 		wizardPage.setPageComplete(message == null);
@@ -314,8 +318,6 @@ IExecutableExtension {
 		final URI projectURI = (!wizardPage.useDefaults()) ? wizardPage
 				.getLocationURI() : null;
 				
-				
-				
 		description.setLocationURI(projectURI);
 		description.setNatureIds(NATURES);
 		final ICommand[] commands = new ICommand[BUILD_COMMANDS.length];
@@ -341,8 +343,8 @@ IExecutableExtension {
 		} catch (InterruptedException e) {return false;}
 		catch (InvocationTargetException e) {
 			Throwable realException = e.getTargetException();
-			MessageDialog.openError(getShell(), "Error", realException
-					.getMessage());
+			MessageDialog.openError(getShell(), "Error",
+					realException.getMessage());
 			return false;
 		}
 
@@ -351,17 +353,32 @@ IExecutableExtension {
 		if (project == null) return false;
 		
 		BasicNewProjectResourceWizard.updatePerspective(config);
-		BasicNewProjectResourceWizard.selectAndReveal(project, workbench
-				.getActiveWorkbenchWindow());
+		BasicNewProjectResourceWizard.selectAndReveal(project,
+				workbench.getActiveWorkbenchWindow());
 
 		return true;
 	}
 
 	
 	/** This creates the project in the workspace. */
+	/**
+	 * Create new android project with all necessary keys.
+	 * 
+	 * @param description	project description
+	 * @param proj			project instance
+	 * @param monitor		monitor for asynchronous
+	 * @param projectName	project name
+	 * @param projectNameLC	project name in lower case
+	 * @param packageName	the name of project package
+	 * @param targetApi		target android api
+	 * @param tempProject	temp folder path
+	 * @param gitRepository
+	 * @throws CoreException
+	 * @throws OperationCanceledException
+	 */
 	void createProject(IProjectDescription description, IProject proj, IProgressMonitor monitor,
 			String projectName,
-			String projectNameLowerCase,
+			String projectNameLC,
 			String packageName,
 			String targetApi,
 			String tempProject,
@@ -370,6 +387,7 @@ IExecutableExtension {
 		try {
 			monitor.beginTask("", 2000);
 			
+			//TODO We really need this ?
 			//final String tempProjectPath = new File(tempProject).getAbsolutePath();
 			
 			proj.create(description, new SubProgressMonitor(monitor, 1000));
@@ -377,6 +395,7 @@ IExecutableExtension {
 			proj.open(IResource.BACKGROUND_REFRESH, new SubProgressMonitor(
 					monitor, 1000));
 			
+			//TODO We really need this ?
 			/*try {proj.setDefaultCharset("UTF-8", monitor);}
 			catch (CoreException e) {e.printStackTrace();}*/
 			
@@ -930,7 +949,40 @@ IExecutableExtension {
 	}
 
 
+	/* (non-Javadoc)
+	 * @see org.eclipse.jface.wizard.Wizard#dispose()
+	 */
+	@Override
+	public final void dispose() {
+		try {mMessageConsoleStream.close();}
+		catch (IOException e) {e.printStackTrace();}
+		mMessageConsoleStream = null;
+		super.dispose();
+	}
+	
+	/** @param message the message for log to current line */
+	@SuppressWarnings("unused")
+	private final void log(String message) {
+		if (mMessageConsoleStream == null) return;
+		mMessageConsoleStream.print(message);
+	}
+	
+	/** @param message the message for log to new line */
+	@SuppressWarnings("unused")
+	private final void logln(String message) {
+		if (mMessageConsoleStream == null) return;
+		mMessageConsoleStream.println(message);
+	}
+	
+	/**	Insert empty line to console */
+	@SuppressWarnings("unused")
+	private final void logln() {
+		if (mMessageConsoleStream == null) return;
+		mMessageConsoleStream.println();
+	}
+	
 	/** @return Default user name specified as runtime eclipse option. */
+	/** @return current user name */
 	private static final String getUserName() {
 		String line = null;
 		try {
@@ -947,6 +999,7 @@ IExecutableExtension {
 	}
 	
 	/** @return Default user name specified as runtime eclipse option. */
+	/** @return current user language. */
 	private static final String getLanguage() {
 		String line = null;
 		try {
@@ -964,6 +1017,7 @@ IExecutableExtension {
 
 	
 	/** @return current date stamp for comment sources. */
+	/** @return current time stamp in string format.	 */
 	private static final String getCurrentDate() {
 		return new SimpleDateFormat("MMM dd, yyyy",
 				new Locale(getLanguage()))
@@ -985,6 +1039,6 @@ IExecutableExtension {
 	      final MessageConsole myConsole = new MessageConsole(name, null);
 	      conMan.addConsoles(new IConsole[]{myConsole});
 	      return myConsole;
-	   }
+	}
 
 }
