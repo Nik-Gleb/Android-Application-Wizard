@@ -3,7 +3,7 @@ Bundle-ManifestVersion: 2
 Bundle-Name: New Application Wizard
 Singleton: true
 Bundle-SymbolicName: ru.nikitenkogleb.androidtools.newappwizard; singleton:=true
-Bundle-Version: 0.0.4
+Bundle-Version: 0.0.8
 Bundle-Activator: ru.nikitenkogleb.androidtools.newappwizard.Activator
 Bundle-Vendor: Nikitenko Gleb
 Bundle-RequiredExecutionEnvironment: JavaSE-1.8
@@ -11,4 +11,5 @@ Bundle-ActivationPolicy: lazy
 Require-Bundle: org.eclipse.ui.ide,
  org.eclipse.core.resources,
  org.eclipse.core.runtime,
- org.eclipse.ui
+ org.eclipse.ui,
+ org.eclipse.ui.console;bundle-version="3.5.300"

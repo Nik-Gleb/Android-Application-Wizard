@@ -1,5 +1,6 @@
 package ru.nikitenkogleb.androidtools.newappwizard;
 
+import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.jface.viewers.IStructuredSelection;
 import org.eclipse.jface.wizard.Wizard;
 import org.eclipse.swt.SWT;
@@ -19,6 +20,11 @@ import org.eclipse.swt.widgets.Text;
 import org.eclipse.ui.INewWizard;
 import org.eclipse.ui.IWorkbench;
 import org.eclipse.ui.actions.WorkspaceModifyOperation;
+import org.eclipse.ui.console.ConsolePlugin;
+import org.eclipse.ui.console.IConsole;
+import org.eclipse.ui.console.IConsoleManager;
+import org.eclipse.ui.console.MessageConsole;
+import org.eclipse.ui.console.MessageConsoleStream;
 import org.eclipse.ui.dialogs.WizardNewProjectCreationPage;
 import org.eclipse.core.runtime.*;
 
@@ -29,6 +35,7 @@ import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.Enumeration;
 import java.util.Locale;
 import java.util.Map;
 
@@ -37,8 +44,9 @@ import org.eclipse.core.internal.events.BuildCommand;
 import org.eclipse.core.resources.*;
 
 import java.io.*;
+
 import org.eclipse.ui.wizards.newresource.BasicNewProjectResourceWizard;
-import org.eclipse.wb.swt.ResourceManager;
+//import org.eclipse.wb.swt.ResourceManager;
 
 import ru.nikitenkogleb.wizards.android.app.root.ResourcesRoot;
 
@@ -190,7 +198,9 @@ IExecutableExtension {
 				Button pasteFromClipboardButton = new Button(container, SWT.NONE);
 				pasteFromClipboardButton.setText("Paste from &clipboard");
 				pasteFromClipboardButton.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, false, false, 1, 1));
-				pasteFromClipboardButton.setImage(ResourceManager.getPluginImage("ru.nikitenkogleb.wizards.android.app", "icons/paste.png"));
+				
+				// TODO Replace to Bungle
+				//pasteFromClipboardButton.setImage(ResourceManager.getPluginImage("ru.nikitenkogleb.wizards.android.app", "icons/paste.png"));
 				final Clipboard cb = new Clipboard(getShell().getDisplay());
 				pasteFromClipboardButton.addSelectionListener(new SelectionAdapter() {
 					@Override
@@ -214,13 +224,25 @@ IExecutableExtension {
 		wizardPage.setTitle("New Android Application");
 		wizardPage.setInitialProjectName("MyApplication");
 		wizardPage.setDescription("This wizard creates a new empty Android Application.\nAlso you can specify existing GIT-repository for CVS-integration.");
-		wizardPage.setImageDescriptor(ResourceManager.getPluginImageDescriptor("ru.nikitenkogleb.wizards.android.app", "icons/android_app.png"));
 		
+		// TODO Remove it
+		//wizardPage.setImageDescriptor(ResourceManager.getPluginImageDescriptor("ru.nikitenkogleb.wizards.android.app", "icons/android_app.png"));
+		wizardPage.setImageDescriptor(ImageDescriptor.createFromURL(Activator.getDefault().getBundle().getResource("icons/android_app.png")));
 		addPage(wizardPage);
-		Activator.getDefault().setDebugging(false);
-		System.out.println(Activator.getDefault().getBundle().getResource("files"));
-		Activator.getDefault().getBundle().getEntryPaths("/");
+		//Activator.getDefault().setDebugging(false);
 		
+		
+		final MessageConsole messageConsole = findConsole("System Output");
+		final MessageConsoleStream messageConsoleStream = messageConsole.newMessageStream();
+	
+		messageConsoleStream.println(Activator.getDefault().getBundle().getResource("files").toString());
+		final Enumeration<String> files = Activator.getDefault().getBundle().getEntryPaths("/files/");
+		
+		while(files.hasMoreElements())
+			messageConsoleStream.println((String) files.nextElement());
+		
+		try {messageConsoleStream.close();}
+		catch (IOException e) {e.printStackTrace();}
 	}
 		
 	/**
@@ -947,5 +969,22 @@ IExecutableExtension {
 				new Locale(getLanguage()))
 				.format(new Date(System.currentTimeMillis()));
 	}
+	
+	/**
+	 * @param name the name of console
+	 * @return founded console
+	 */
+	private final MessageConsole findConsole(String name) {
+	      final ConsolePlugin plugin = ConsolePlugin.getDefault();
+	      final IConsoleManager conMan = plugin.getConsoleManager();
+	      final IConsole[] existing = conMan.getConsoles();
+	      for (int i = 0; i < existing.length; i++)
+	         if (name.equals(existing[i].getName()))
+	            return (MessageConsole) existing[i];
+	      //no console found, so create a new one
+	      final MessageConsole myConsole = new MessageConsole(name, null);
+	      conMan.addConsoles(new IConsole[]{myConsole});
+	      return myConsole;
+	   }
 
 }
