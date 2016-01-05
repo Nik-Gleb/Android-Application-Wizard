@@ -8,6 +8,6 @@
 
 Contains three Eclipse-project:
 
-*   PluginAndroidWizard - A plugin that implements logic of wizard
-*   FeatureAndroidTools - 'Eclipse-feature' for groups plugins (yet single) by features
-*	UpdateSiteAndroidTools - The site for the plug-in installation
+*   Plugin - A plugin that implements logic of wizard
+*   Feature - 'Eclipse-feature' for groups plugins (yet single) by features
+*	  Update Site - The site for the plug-in installation
