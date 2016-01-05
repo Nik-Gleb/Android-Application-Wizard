@@ -10,4 +10,4 @@ Contains three Eclipse-project:
 
 *   Plugin - A plugin that implements logic of wizard
 *   Feature - 'Eclipse-feature' for groups plugins (yet single) by features
-*	  Update Site - The site for the plug-in installation
+*	Update Site - The site for the plug-in installation
