@@ -76,6 +76,18 @@ IExecutableExtension {
 			"org.eclipse.jdt.core.javanature"
 	};
 	
+	/**	All folders in project. */
+	private static final String[] FOLDERS = {
+			".settings", "src", "res", "bin", "gen",
+			"res/mipmap-ldpi", "res/mipmap-mdpi", "res/mipmap-hdpi",
+			"res/mipmap-xhdpi", "res/mipmap-xxhdpi", "res/mipmap-xxxhdpi",
+			"res/layout", "res/values"
+	};
+	
+	/** All sources folders in project. */
+	private static final String[] SRC_FOLDERS = {"app", "utils"};
+
+	
 	/**	The name of plugin console for outputs. */
 	private static final String PLUGIN_CONSOLE_NAME = "System Output";
 	
@@ -220,9 +232,7 @@ IExecutableExtension {
 								if (!data.startsWith("git@"))
 									new URL(data).openConnection().connect();
 								gitRepositoryText.setText(data);
-							} catch (Exception e1) {
-								e1.printStackTrace();
-							}
+							} catch (Exception e1) {e1.printStackTrace();;}
 					}
 				});
 				
@@ -372,9 +382,10 @@ IExecutableExtension {
 	 * @param packageName	the name of project package
 	 * @param targetApi		target android api
 	 * @param tempProject	temp folder path
-	 * @param gitRepository
-	 * @throws CoreException
-	 * @throws OperationCanceledException
+	 * @param gitRepository	path to git-repository
+	 * 
+	 * @throws CoreException	causes if anything was failed
+	 * @throws OperationCanceledException causes after user-cancel action
 	 */
 	void createProject(IProjectDescription description, IProject proj, IProgressMonitor monitor,
 			String projectName,
@@ -407,82 +418,22 @@ IExecutableExtension {
 			 * before updating the perspective.
 			 */
 			final IContainer container = (IContainer) proj;
-			InputStream inputStream = null;
 			
-			final IFolder settingsFolder = container.getFolder(new Path(".settings"));
-			if (!settingsFolder.exists())
-				settingsFolder.create(true, true, monitor);
 			
-			final IFolder srcFolder = container.getFolder(new Path("src"));
-			if (!srcFolder.exists())
-				srcFolder.create(true, true, monitor);
+			/*InputStream inputStream = null;
+			addFileToProject(null, inputStream, proj, monitor);*/
+			
+			createFolders(packageName, container, monitor);
 
-			final IFolder resFolder = container.getFolder(new Path("res"));
-			if (!resFolder.exists())
-				resFolder.create(true, true, monitor);
-			
-			final IFolder binFolder = container.getFolder(new Path("bin"));
-			if (!binFolder.exists())
-				binFolder.create(true, true, monitor);
-			
-			final IFolder genFolder = container.getFolder(new Path("gen"));
-			if (!genFolder.exists())
-				genFolder.create(true, true, monitor);
-			
-			final IFolder mipmapLdpiFolder = container.getFolder(new Path("res/mipmap-ldpi"));
-			if (!mipmapLdpiFolder.exists())
-				mipmapLdpiFolder.create(true, true, monitor);
-			
-			final IFolder mipmapMdpiFolder = container.getFolder(new Path("res/mipmap-mdpi"));
-			if (!mipmapMdpiFolder.exists())
-				mipmapMdpiFolder.create(true, true, monitor);
-			
-			final IFolder mipmapHdpiFolder = container.getFolder(new Path("res/mipmap-hdpi"));
-			if (!mipmapHdpiFolder.exists())
-				mipmapHdpiFolder.create(true, true, monitor);
-			
-			final IFolder mipmapXHdpiFolder = container.getFolder(new Path("res/mipmap-xhdpi"));
-			if (!mipmapXHdpiFolder.exists())
-				mipmapXHdpiFolder.create(true, true, monitor);
-			
-			final IFolder mipmapXXHdpiFolder = container.getFolder(new Path("res/mipmap-xxhdpi"));
-			if (!mipmapXXHdpiFolder.exists())
-				mipmapXXHdpiFolder.create(true, true, monitor);
-			
-			final IFolder mipmapXXXHdpiFolder = container.getFolder(new Path("res/mipmap-xxxhdpi"));
-			if (!mipmapXXXHdpiFolder.exists())
-				mipmapXXXHdpiFolder.create(true, true, monitor);
-
-			final String packageFolders[] = packageName.split("\\.");
-			String packagePath = "src";
-			for (int i = 0; i < packageFolders.length; i++) {
-				packagePath = packagePath + File.separator + packageFolders[i]; 
-				final IFolder folder = container.getFolder(new Path(packagePath));
-				if (!folder.exists()) folder.create(true, true, monitor);
-			}
-			
-			final IFolder appFolder = container.getFolder(new Path(packagePath + "/app"));
-			if (!appFolder.exists()) appFolder.create(true, true, monitor);
-			final IFolder utilsFolder = container.getFolder(new Path(packagePath + "/utils"));
-			if (!utilsFolder.exists()) utilsFolder.create(true, true, monitor);
-			
-			final IFolder layoutFolder = container.getFolder(new Path("res/layout"));
-			if (!layoutFolder.exists())
-				layoutFolder.create(true, true, monitor);
-			
-			final IFolder valuesFolder = container.getFolder(new Path("res/values"));
-			if (!valuesFolder.exists())
-				valuesFolder.create(true, true, monitor);
 			
 			try {
 				mCloneBatFile = FileLocator.toFileURL(this.getClass()
 						.getResource("root/clone.bat")).getFile().substring(1);
 				mCommitBatFile = FileLocator.toFileURL(this.getClass()
 						.getResource("root/commit.bat")).getFile().substring(1);
-			} catch (IOException e) {e.printStackTrace();}
+			} catch (IOException e) {callCrash(e);}
 			
-			inputStream = this.getClass().getResourceAsStream("root/classpath");
-			
+			/*inputStream = this.getClass().getResourceAsStream("root/classpath");
 			addFileToProject(container, new Path(".classpath"), inputStream, monitor);
 			inputStream.close();
 			
@@ -498,7 +449,7 @@ IExecutableExtension {
 					inputStream, monitor);
 			inputStream.close();*/
 			
-			inputStream = this.getClass().getResourceAsStream("root/gitignore");
+			/*inputStream = this.getClass().getResourceAsStream("root/gitignore");
 			addFileToProject(container, new Path(".gitignore"), inputStream, monitor);
 			inputStream.close();
 			
@@ -561,7 +512,7 @@ IExecutableExtension {
 			if (File.separator.equals(winSeparator))
 				sdkPath = sdkPath.replace(winSeparator, doubleSeparator);
 						
-			inputStream = this.getClass().getResourceAsStream("root/local.properties");
+			/*inputStream = this.getClass().getResourceAsStream("root/local.properties");
 			inputStream = openContentStream(KEY_SDK_PATH, sdkPath, inputStream);
 			addFileToProject(container, new Path("local.properties"), inputStream, monitor);
 			inputStream.close();
@@ -614,7 +565,7 @@ IExecutableExtension {
 					KEY_PACKAGE_NAME, packageName, KEY_API_LEVEL,
 					targetApi.substring(targetApi.length() - 2), inputStream);
 			addFileToProject(container, new Path("AndroidManifest.xml"), inputStream, monitor);
-			inputStream.close();
+			inputStream.close();*/
 
 			String license = "";
 			if(gitRepository != null && gitRepository.length() != 0) {
@@ -638,7 +589,7 @@ IExecutableExtension {
 			System.out.println("Name: " + userName);
 			System.out.println("Date: " + date);
 			
-			inputStream = ResourcesRoot.class.getResourceAsStream("src/package-info.java.src");
+			/*inputStream = ResourcesRoot.class.getResourceAsStream("src/package-info.java.src");
 			inputStream = openContentStream(
 					KEY_PROJECT_NAME, projectName,
 					KEY_LICENSE, license,
@@ -702,7 +653,7 @@ IExecutableExtension {
 					KEY_AUTHOR, userName,
 					inputStream);
 			addFileToProject(container, new Path(packagePath + "/utils/Utils.java"), inputStream, monitor);
-			inputStream.close();
+			inputStream.close();*/
 			
 			if(gitRepository != null && gitRepository.length() != 0)
 				System.out.println("Result: " +
@@ -710,122 +661,99 @@ IExecutableExtension {
 								mCommitBatFile,
 								proj.getLocation().toString())));
 			
-		} catch (Exception ioe) {
-			IStatus status = new Status(IStatus.ERROR, "ru.nikitenkogleb.wizards.android.app", IStatus.OK,
-					ioe.getMessage(), ioe);
-			throw new CoreException(status);
-		} finally {
-			monitor.done();
+		} finally {	monitor.done();}
+	}
+	
+	/**
+	 * Create directory-structure for the new project.
+	 * 
+	 * @param packageName the name of package
+	 * @param project project container
+	 * @param monitor for async-operation
+	 * 
+	 * @return path to root sources
+	 * @throws CoreException causes if anything was failed
+	 **/
+	private final String createFolders(String packageName, IContainer project, IProgressMonitor monitor)
+			throws CoreException {
+		
+		for (int i = 0; i < FOLDERS.length; i++)
+			createFolder(FOLDERS[i], project, monitor);
+		
+		final String packagePath = createSrcFolder(packageName, project, monitor);
+		
+		for (int i = 0; i < SRC_FOLDERS.length; i++)
+			//createSrcFolder(packagePath, SRC_FOLDERS[i], project, monitor);
+			createFolder(packagePath + File.separator + SRC_FOLDERS[i], project, monitor);
+		
+		return packagePath;
+		
+	}
+	
+	/**
+	 * Create source folder in project.
+	 * 
+	 * @param packagePath	the src-root path 
+	 * @param folderPath	path to folder in src	
+	 * @param project		project container
+	 * @param monitor		monitor async operation
+	 * 
+	 * @throws CoreException causes when anything was failed
+	 */
+	private final void createSrcFolder(String packagePath, String folderPath,
+			IContainer project, IProgressMonitor monitor) throws CoreException {
+		project.getFolder(new Path(packagePath + File.separator + folderPath))
+		.create(true, true, monitor);
+	}
+	
+	/**
+	 * Create folder in project.
+	 * 
+	 * @param folderPath new folder path
+	 * @param project project container
+	 * @param monitor for async-operation
+	 * 
+	 * @throws CoreException causes if anything was failed
+	 */
+	private final void createFolder(String folderPath, IContainer project, IProgressMonitor monitor)
+			throws CoreException {
+		project.getFolder(new Path(folderPath))
+		.create(true, true, monitor);
+	}
+	
+	/**
+	 * Create src folder by package name. 
+	 * 
+	 * @param packageName project package name
+	 * @param project project container
+	 * @param monitor for async-operation
+	 * 
+	 * @return path to src-root
+	 * @throws CoreException causes if anything was failed
+	 **/
+	private final String createSrcFolder(String packageName,
+			IContainer project,	IProgressMonitor monitor) throws CoreException {
+		final String packageFolders[] = packageName.split("\\.");
+		String packagePath = "src";
+		for (int i = 0; i < packageFolders.length; i++) {
+			packagePath = packagePath + File.separator + packageFolders[i]; 
+			project.getFolder(new Path(packagePath)).create(true, true, monitor);
 		}
+		return packagePath;
 	}
 	
-	
-	
-	/**
-	 * @param tempProject name of temp project folder
-	 * @return Comments, extracted from readme-file
-	 */
-	private static final String extractComments(File file) {
-		final StringBuilder builder = new StringBuilder();
-		InputStreamReader inputStreamReader = null; BufferedReader bufferedReader = null;
-		try {
-			inputStreamReader = new InputStreamReader(new FileInputStream(file), "UTF-8");
-			bufferedReader = new BufferedReader(inputStreamReader);
-			bufferedReader.readLine();
-			String line = null;
-			while ((line = bufferedReader.readLine()) != null)
-				builder.append(line);
-			
-		} catch (IOException e) {e.printStackTrace();}
-		finally {
-			if (inputStreamReader != null)
-				try {inputStreamReader.close();} catch (IOException e) {e.printStackTrace();}
-			if (bufferedReader != null)
-				try {bufferedReader.close();} catch (IOException e) {e.printStackTrace();}
-
-		};
-		
-		return builder.toString();
-	}
-	
-	/**
-	 * @param tempProject name of temp project folder
-	 * @return License, extracted from license-file
-	 */
-	private static final String extractLicense(File file) {
-		/* We want to be truly OS-agnostic */
-		final String newline = System.getProperty("line.separator");
-		final StringBuilder builder = new StringBuilder();
-		InputStreamReader inputStreamReader = null; BufferedReader bufferedReader = null;
-		try {
-			inputStreamReader = new InputStreamReader(new FileInputStream(file), "UTF-8");
-			bufferedReader = new BufferedReader(inputStreamReader);
-			builder.append(" *  ");
-			builder.append(newline);
-			/*builder.append("/*"); builder.append(newline);
-			builder.append(" *	"); builder.append(javaFileName); builder.append(newline);
-			builder.append(" *	"); builder.append(projectName); builder.append(newline);
-			builder.append(" *"); builder.append(bufferedReader.readLine()); builder.append(newline);
-			builder.append(" *  "); builder.append(bufferedReader.readLine()); builder.append(newline);
-			builder.append(" *"); builder.append(bufferedReader.readLine()); builder.append(newline);
-			*/String line = null;
-			while ((line = bufferedReader.readLine()) != null) {
-				builder.append(" *  ");
-				builder.append(line);
-				builder.append(newline);
-			}
-			//builder.append(" */");
-		} catch (IOException e) {e.printStackTrace();}
-		finally {
-			if (inputStreamReader != null)
-				try {inputStreamReader.close();} catch (IOException e) {e.printStackTrace();}
-			if (bufferedReader != null)
-				try {bufferedReader.close();} catch (IOException e) {e.printStackTrace();}
-
-		};
-		
-		return builder.toString();
-	}
-
 	/**
 	 * @param command command for execute os-script
 	 * @return result of executing
+	 * @throws CoreException causes when anything was failed
 	 */
-	private static final int exec(String command) {
+	private static final int exec(String command) throws CoreException {
 		int result = -1;
 		try {result = Runtime.getRuntime().exec(command).waitFor();}
-		catch (IOException | InterruptedException e) {e.printStackTrace();}
+		catch (IOException | InterruptedException e) {callCrash(e);}
 		return result;
 	}
 	
-	/** @return available android api targets */
-	private static final String[] getApiTargets() {
-		
-		String[] result = null;
-		try {
-			final Process process =
-					
-					//Runtime.getRuntime().exec("cmd /c start /wait " + EXEC_ANDROID_LIST_TARGETS);
-					Runtime.getRuntime().exec(EXEC_ANDROID_LIST_TARGETS);
-			process.waitFor();
-			final BufferedReader bufferedReader =
-					new BufferedReader(new InputStreamReader(process.getInputStream()));
-			final ArrayList<String> targets = new ArrayList<String>();
-			String line = null;
-			try {
-				while ((line = bufferedReader.readLine()) != null)
-					if (line.startsWith("id: "))
-						targets.add(line.substring(
-								line.indexOf("\"") + 1, line.length() - 1));
-				result = targets.toArray(new String[targets.size()]);
-			} catch (IOException e) {e.printStackTrace();}
-		      
-		    bufferedReader.close();
-		} catch (IOException | InterruptedException e) {e.printStackTrace();}
-		return result;
-	}
-
-
 	/*
 	 * (non-Javadoc)
 	 * 
@@ -844,14 +772,91 @@ IExecutableExtension {
 	}
 	
 	/** Adds a new file to the project. */
-	private void addFileToProject(IContainer container, Path path,
-			InputStream contentStream, IProgressMonitor monitor)
+	/**
+	 * Put new file to project.
+	 * 
+	 * @param filePath		path of file
+	 * @param contentStream	content of file
+	 * 
+	 * @param project project container
+	 * @param monitor for async-operation
+	 * @throws CoreException causes if anything was failed
+	 */
+	private final void addFileToProject(String filePath, InputStream contentStream,
+			IContainer project, IProgressMonitor monitor)
 			throws CoreException {
-		final IFile file = container.getFile(path);
-		if (file.exists())
-			file.setContents(contentStream, true, true, monitor);
-		else
-			file.create(contentStream, true, monitor);
+		project.getFile(new Path(filePath)).create(contentStream, true, monitor);
+	}
+	
+	/**
+	 * Put new file to project by key-values.
+	 * 
+	 * @param filePath		path of file
+	 * @param contentStream	content of file
+	 * 
+	 * @param project project container
+	 * @param monitor for async-operation
+	 * @throws CoreException causes if anything was failed
+	 */
+	private final void addFileToProject(InputStream contentStream, String filePath,
+			String key, String value,
+			IContainer project, IProgressMonitor monitor)
+			throws CoreException {
+		InputStream inputStream = this.getClass()
+				.getResourceAsStream("root/" + filePath);
+		inputStream = openContentStream(key, value, inputStream);
+		addFileToProject(filePath, inputStream, project, monitor);
+		try {inputStream.close();} catch (IOException e) {callCrash(e);}
+	}
+	
+	/**
+	 * Put new file to project by key-values.
+	 * 
+	 * @param filePath		path of file
+	 * @param contentStream	content of file
+	 * 
+	 * @param project project container
+	 * @param monitor for async-operation
+	 * @throws CoreException causes if anything was failed
+	 */
+	private final void addFileToProject(InputStream contentStream, String filePath,
+			String key1, String value1,
+			String key2, String value2,
+			String key3, String value3,
+			IContainer project, IProgressMonitor monitor)
+			throws CoreException {
+		InputStream inputStream = this.getClass()
+				.getResourceAsStream("root/" + filePath);
+		inputStream = openContentStream(key1, value1, key2, value2,
+				key3, value3, inputStream);
+		addFileToProject(filePath, inputStream, project, monitor);
+		try {inputStream.close();} catch (IOException e) {callCrash(e);}
+	}
+	
+	/**
+	 * Put new file to project by key-values.
+	 * 
+	 * @param filePath		path of file
+	 * @param contentStream	content of file
+	 * 
+	 * @param project project container
+	 * @param monitor for async-operation
+	 * @throws CoreException causes if anything was failed
+	 */
+	private final void addFileToProject(InputStream contentStream, String filePath,
+			String key1, String value1,
+			String key2, String value2,
+			String key3, String value3,
+			String key4, String value4,
+			String key5, String value5,
+			IContainer project, IProgressMonitor monitor)
+			throws CoreException {
+		InputStream inputStream = this.getClass()
+				.getResourceAsStream("root/" + filePath);
+		inputStream = openContentStream(key1, value1, key2, value2,
+				key3, value3, key4, value4, key5, value5,inputStream);
+		addFileToProject(filePath, inputStream, project, monitor);
+		try {inputStream.close();} catch (IOException e) {callCrash(e);}
 	}
 	
 	/**
@@ -872,11 +877,7 @@ IExecutableExtension {
 					sb.append(newline);
 				}
 			} finally {reader.close();}
-		} catch (IOException ioe) {
-			IStatus status = new Status(IStatus.ERROR, "EmptyAppWizard", IStatus.OK,
-					ioe.getLocalizedMessage(), null);
-			throw new CoreException(status);
-		}
+		} catch (IOException e) {callCrash(e);}
 		return new ByteArrayInputStream(sb.toString().getBytes());
 	}
 	
@@ -902,11 +903,7 @@ IExecutableExtension {
 					sb.append(newline);
 				}
 			} finally {reader.close();}
-		} catch (IOException ioe) {
-			IStatus status = new Status(IStatus.ERROR, "EmptyAppWizard", IStatus.OK,
-					ioe.getLocalizedMessage(), null);
-			throw new CoreException(status);
-		}
+		} catch (IOException e) {callCrash(e);}
 		return new ByteArrayInputStream(sb.toString().getBytes());
 	}
 	
@@ -940,90 +937,11 @@ IExecutableExtension {
 					sb.append(newline);
 				}
 			} finally {reader.close();}
-		} catch (IOException ioe) {
-			IStatus status = new Status(IStatus.ERROR, "EmptyAppWizard", IStatus.OK,
-					ioe.getLocalizedMessage(), null);
-			throw new CoreException(status);
-		}
+		} catch (IOException e) {callCrash(e);}
 		return new ByteArrayInputStream(sb.toString().getBytes());
 	}
 
 
-	/* (non-Javadoc)
-	 * @see org.eclipse.jface.wizard.Wizard#dispose()
-	 */
-	@Override
-	public final void dispose() {
-		try {mMessageConsoleStream.close();}
-		catch (IOException e) {e.printStackTrace();}
-		mMessageConsoleStream = null;
-		super.dispose();
-	}
-	
-	/** @param message the message for log to current line */
-	@SuppressWarnings("unused")
-	private final void log(String message) {
-		if (mMessageConsoleStream == null) return;
-		mMessageConsoleStream.print(message);
-	}
-	
-	/** @param message the message for log to new line */
-	@SuppressWarnings("unused")
-	private final void logln(String message) {
-		if (mMessageConsoleStream == null) return;
-		mMessageConsoleStream.println(message);
-	}
-	
-	/**	Insert empty line to console */
-	@SuppressWarnings("unused")
-	private final void logln() {
-		if (mMessageConsoleStream == null) return;
-		mMessageConsoleStream.println();
-	}
-	
-	/** @return Default user name specified as runtime eclipse option. */
-	/** @return current user name */
-	private static final String getUserName() {
-		String line = null;
-		try {
-			final BufferedReader reader = new BufferedReader(new FileReader(
-					new File(new File(Platform.getInstallLocation().getURL().toURI()),
-							"eclipse.ini").getAbsolutePath()));
-			try {
-				while ((line = reader.readLine()) != null)
-					if (line.startsWith("-Duser.name="))
-						return line.substring(line.indexOf("=") + 1);
-			} finally {reader.close();}
-		} catch (IOException | URISyntaxException ioe) {ioe.printStackTrace();}
-		return "";
-	}
-	
-	/** @return Default user name specified as runtime eclipse option. */
-	/** @return current user language. */
-	private static final String getLanguage() {
-		String line = null;
-		try {
-			final BufferedReader reader = new BufferedReader(new FileReader(
-					new File(new File(Platform.getInstallLocation().getURL().toURI()),
-							"eclipse.ini").getAbsolutePath()));
-			try {
-				while ((line = reader.readLine()) != null)
-					if (line.startsWith("-Duser.language="))
-						return line.substring(line.indexOf("=") + 1);
-			} finally {reader.close();}
-		} catch (IOException | URISyntaxException ioe) {ioe.printStackTrace();}
-		return "";
-	}
-
-	
-	/** @return current date stamp for comment sources. */
-	/** @return current time stamp in string format.	 */
-	private static final String getCurrentDate() {
-		return new SimpleDateFormat("MMM dd, yyyy",
-				new Locale(getLanguage()))
-				.format(new Date(System.currentTimeMillis()));
-	}
-	
 	/**
 	 * @param name the name of console
 	 * @return founded console
@@ -1039,6 +957,181 @@ IExecutableExtension {
 	      final MessageConsole myConsole = new MessageConsole(name, null);
 	      conMan.addConsoles(new IConsole[]{myConsole});
 	      return myConsole;
+	}
+
+	/**	Show crash-alert */
+	private static final void callCrash(Throwable exception) throws CoreException {
+		throw new CoreException(new Status(IStatus.ERROR, "Can't create project",
+						IStatus.OK, exception.getLocalizedMessage(), exception));
+	}
+
+	/** @param message the message for log to current line */
+	@SuppressWarnings("unused")
+	private final void log(String message) {
+		if (mMessageConsoleStream == null) return;
+		mMessageConsoleStream.print(message);
+	}
+
+	/** @param message the message for log to new line */
+	@SuppressWarnings("unused")
+	private final void logln(String message) {
+		if (mMessageConsoleStream == null) return;
+		mMessageConsoleStream.println(message);
+	}
+
+	/**	Insert empty line to console */
+	@SuppressWarnings("unused")
+	private final void logln() {
+		if (mMessageConsoleStream == null) return;
+		mMessageConsoleStream.println();
+	}
+
+	/* (non-Javadoc)
+	 * @see org.eclipse.jface.wizard.Wizard#dispose()
+	 */
+	@Override
+	public final void dispose() {
+		try {mMessageConsoleStream.close();}
+		catch (IOException e) {e.printStackTrace();}
+		mMessageConsoleStream = null;
+		super.dispose();
+	}
+	
+	/**
+	 * @param tempProject name of temp project folder
+	 * @return Comments, extracted from readme-file
+	 * @throws CoreException causes when anything was failed
+	 */
+	private static final String extractComments(File file) throws CoreException {
+		final StringBuilder builder = new StringBuilder();
+		InputStreamReader inputStreamReader = null; BufferedReader bufferedReader = null;
+		try {
+			inputStreamReader = new InputStreamReader(new FileInputStream(file), "UTF-8");
+			bufferedReader = new BufferedReader(inputStreamReader);
+			bufferedReader.readLine();
+			String line = null;
+			while ((line = bufferedReader.readLine()) != null)
+				builder.append(line);
+			
+		} catch (IOException e) {callCrash(e);}
+		finally {
+			if (inputStreamReader != null)
+				try {inputStreamReader.close();} catch (IOException e) {callCrash(e);}
+			if (bufferedReader != null)
+				try {bufferedReader.close();} catch (IOException e) {callCrash(e);}
+	
+		};
+		
+		return builder.toString();
+	}
+
+	/**
+	 * @param tempProject name of temp project folder
+	 * @return License, extracted from license-file
+	 * @throws CoreException causes when anythig was failed
+	 */
+	private static final String extractLicense(File file) throws CoreException {
+		/* We want to be truly OS-agnostic */
+		final String newline = System.getProperty("line.separator");
+		final StringBuilder builder = new StringBuilder();
+		InputStreamReader inputStreamReader = null; BufferedReader bufferedReader = null;
+		try {
+			inputStreamReader = new InputStreamReader(new FileInputStream(file), "UTF-8");
+			bufferedReader = new BufferedReader(inputStreamReader);
+			builder.append(" *  ");
+			builder.append(newline);
+			/*builder.append("/*"); builder.append(newline);
+			builder.append(" *	"); builder.append(javaFileName); builder.append(newline);
+			builder.append(" *	"); builder.append(projectName); builder.append(newline);
+			builder.append(" *"); builder.append(bufferedReader.readLine()); builder.append(newline);
+			builder.append(" *  "); builder.append(bufferedReader.readLine()); builder.append(newline);
+			builder.append(" *"); builder.append(bufferedReader.readLine()); builder.append(newline);
+			*/String line = null;
+			while ((line = bufferedReader.readLine()) != null) {
+				builder.append(" *  ");
+				builder.append(line);
+				builder.append(newline);
+			}
+			//builder.append(" */");
+		} catch (IOException e) {callCrash(e);}
+		finally {
+			if (inputStreamReader != null)
+				try {inputStreamReader.close();} catch (IOException e) {callCrash(e);}
+			if (bufferedReader != null)
+				try {bufferedReader.close();} catch (IOException e) {callCrash(e);}
+	
+		};
+		
+		return builder.toString();
+	}
+
+	/** @return available android api targets */
+	private static final String[] getApiTargets() {
+		
+		String[] result = null;
+		try {
+			final Process process =
+					
+					//Runtime.getRuntime().exec("cmd /c start /wait " + EXEC_ANDROID_LIST_TARGETS);
+					Runtime.getRuntime().exec(EXEC_ANDROID_LIST_TARGETS);
+			process.waitFor();
+			final BufferedReader bufferedReader =
+					new BufferedReader(new InputStreamReader(process.getInputStream()));
+			final ArrayList<String> targets = new ArrayList<String>();
+			String line = null;
+			try {
+				while ((line = bufferedReader.readLine()) != null)
+					if (line.startsWith("id: "))
+						targets.add(line.substring(
+								line.indexOf("\"") + 1, line.length() - 1));
+				result = targets.toArray(new String[targets.size()]);
+			} catch (IOException e) {e.printStackTrace();}
+		      
+		    bufferedReader.close();
+		} catch (IOException | InterruptedException e) {e.printStackTrace();}
+		return result;
+	}
+
+	/** @return Default user name specified as runtime eclipse option. */
+	/** @return current user name */
+	private static final String getUserName() throws CoreException{
+		String line = null;
+		try {
+			final BufferedReader reader = new BufferedReader(new FileReader(
+					new File(new File(Platform.getInstallLocation().getURL().toURI()),
+							"eclipse.ini").getAbsolutePath()));
+			try {
+				while ((line = reader.readLine()) != null)
+					if (line.startsWith("-Duser.name="))
+						return line.substring(line.indexOf("=") + 1);
+			} finally {reader.close();}
+		} catch (IOException | URISyntaxException e) {callCrash(e);}
+		return "";
+	}
+	
+	/** @return Default user name specified as runtime eclipse option. */
+	/** @return current user language. */
+	private static final String getLanguage() throws CoreException {
+		String line = null;
+		try {
+			final BufferedReader reader = new BufferedReader(new FileReader(
+					new File(new File(Platform.getInstallLocation().getURL().toURI()),
+							"eclipse.ini").getAbsolutePath()));
+			try {
+				while ((line = reader.readLine()) != null)
+					if (line.startsWith("-Duser.language="))
+						return line.substring(line.indexOf("=") + 1);
+			} finally {reader.close();}
+		} catch (IOException | URISyntaxException e) {callCrash(e);}
+		return "";
+	}
+
+	/** @return current date stamp for comment sources. */
+	/** @return current time stamp in string format.	 */
+	private static final String getCurrentDate() throws CoreException {
+		return new SimpleDateFormat("MMM dd, yyyy",
+				new Locale(getLanguage()))
+				.format(new Date(System.currentTimeMillis()));
 	}
 
 }
