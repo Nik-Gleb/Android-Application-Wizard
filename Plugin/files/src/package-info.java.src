@@ -1,0 +1,12 @@
+/*
+ *  package-info.java
+ *  ${projectName}
+${license} */
+/**
+ * Root project package.
+ *
+ * @author ${author}
+ * @version 1.0
+ * @since ${date}
+ */
+package ${packageName};

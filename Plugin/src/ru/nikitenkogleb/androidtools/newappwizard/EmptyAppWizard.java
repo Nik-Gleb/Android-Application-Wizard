@@ -2,20 +2,19 @@ package ru.nikitenkogleb.androidtools.newappwizard;
 
 import org.eclipse.jface.viewers.IStructuredSelection;
 import org.eclipse.jface.wizard.Wizard;
-import org.eclipse.swt.SWT;
-import org.eclipse.swt.dnd.Clipboard;
-import org.eclipse.swt.dnd.TextTransfer;
-import org.eclipse.swt.events.ModifyEvent;
-import org.eclipse.swt.events.ModifyListener;
-import org.eclipse.swt.events.SelectionAdapter;
-import org.eclipse.swt.events.SelectionEvent;
-import org.eclipse.swt.layout.GridData;
-import org.eclipse.swt.layout.GridLayout;
-import org.eclipse.swt.widgets.Button;
-import org.eclipse.swt.widgets.Combo;
-import org.eclipse.swt.widgets.Composite;
-import org.eclipse.swt.widgets.Label;
-import org.eclipse.swt.widgets.Text;
+import org.eclipse.jgit.api.CloneCommand;
+import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.PushCommand;
+import org.eclipse.jgit.api.TransportConfigCallback;
+import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.internal.storage.file.FileRepository;
+import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.transport.JschConfigSessionFactory;
+import org.eclipse.jgit.transport.OpenSshConfig.Host;
+import org.eclipse.jgit.transport.SshTransport;
+import org.eclipse.jgit.transport.Transport;
+import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
+import org.eclipse.jgit.util.FS;
 import org.eclipse.ui.INewWizard;
 import org.eclipse.ui.IWorkbench;
 import org.eclipse.ui.actions.WorkspaceModifyOperation;
@@ -24,17 +23,21 @@ import org.eclipse.ui.console.IConsole;
 import org.eclipse.ui.console.IConsoleManager;
 import org.eclipse.ui.console.MessageConsole;
 import org.eclipse.ui.console.MessageConsoleStream;
-import org.eclipse.ui.dialogs.WizardNewProjectCreationPage;
 import org.eclipse.core.runtime.*;
 
 import java.lang.reflect.InvocationTargetException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.FileVisitOption;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.Enumeration;
+import java.util.EnumSet;
 import java.util.Locale;
 import java.util.Map;
 
@@ -46,7 +49,11 @@ import java.io.*;
 
 import org.eclipse.ui.wizards.newresource.BasicNewProjectResourceWizard;
 
-import ru.nikitenkogleb.wizards.android.app.root.ResourcesRoot;
+import com.jcraft.jsch.JSch;
+import com.jcraft.jsch.JSchException;
+import com.jcraft.jsch.Session;
+
+import ru.nikitenkogleb.androidtools.newappwizard.WizardPage.WizardCallback;
 
 /**
  * This is a sample new wizard. Its role is to create a new file 
@@ -61,8 +68,9 @@ import ru.nikitenkogleb.wizards.android.app.root.ResourcesRoot;
 
 @SuppressWarnings("restriction")
 public class EmptyAppWizard extends Wizard implements INewWizard,
-IExecutableExtension {
+								IExecutableExtension, WizardCallback {
 	
+
 	/**	Standard Android build commands for buildSpec */
 	private static final String[] BUILD_COMMANDS = new String[] {
 			"com.android.ide.eclipse.adt.ResourceManagerBuilder",
@@ -94,29 +102,11 @@ IExecutableExtension {
 	/**	String prefix for temp project directory. */
 	private static final String TEMP_PREFFIX = "_temp";
 	
-	/**	Android list targets command line */
-	private static final String EXEC_ANDROID_LIST_TARGETS = "android.bat list targets";
-	
-	/** Windows-specific clone operations. */
-	private static final String CLONE_COMMAND_WINDOWS =
-			"cmd /c start /wait %s %s %s %s";
-	/** Windows-specific commit operations. */
-	private static final String COMMIT_COMMAND_WINDOWS =
-			"cmd /c start /wait %s %s";
-	
-	private static final String REGEXP_PACKAGE_NAME =
-			"([\\p{L}_$][\\p{L}\\p{N}_$]*\\.)*[\\p{L}_$][\\p{L}\\p{N}_$]*";
-	
+	@SuppressWarnings("unused")
 	private static final Locale LOCALE = Locale.getDefault();
 		
-	private String mCloneBatFile = null;
-	private String mCommitBatFile = null;
-	
-	/*
-	 * Use the WizardNewProjectCreationPage, which is provided by the Eclipse
-	 * framework.
-	 */
-	private WizardNewProjectCreationPage wizardPage;
+	/**	Wizard Page */
+	private final WizardPage mWizardPage = new WizardPage(this);
 
 	private IConfigurationElement config;
 
@@ -127,10 +117,7 @@ IExecutableExtension {
 
 	private IProject project;
 	
-	private Text packageNameText = null;
-	private Text gitRepositoryText = null;
-	private Combo targetApiCombo = null;
-
+	/**	Debug console */
 	private MessageConsoleStream mMessageConsoleStream;
 	
 	/**	Project name key */
@@ -155,152 +142,14 @@ IExecutableExtension {
 	/** Constructor for EmptyAppWizard. */
 	public EmptyAppWizard() {
 		super();
-		final MessageConsole messageConsole =
-				findConsole(PLUGIN_CONSOLE_NAME);
+		final MessageConsole messageConsole = findConsole(PLUGIN_CONSOLE_NAME);
 		if (messageConsole != null)
-			mMessageConsoleStream =
-			messageConsole.newMessageStream();
+			mMessageConsoleStream =	messageConsole.newMessageStream();
 	}
 	
 	/** Adding the page to the wizard. */
-	public void addPages() {
+	public void addPages() {addPage(mWizardPage);}
 		
-		/*
-		 * Unlike the custom new wizard, we just add the pre-defined one and
-		 * don't necessarily define our own.
-		 */
-		wizardPage = new WizardNewProjectCreationPage("New Android Application") {
-			@Override
-			public void createControl(Composite parent) {
-				super.createControl(parent);
-				parent = (Composite) getControl();
-				Composite container = new Composite(parent, SWT.NONE);
-				setControl(parent);
-				
-				GridLayout gl_container = new GridLayout(4, false);
-				gl_container.verticalSpacing = 8;
-				gl_container.marginWidth = 8;
-				gl_container.marginHeight = 8;
-				gl_container.horizontalSpacing = 8;
-				container.setLayout(gl_container);
-				
-				Label packageNameLabel = new Label(container, SWT.NONE);
-				packageNameLabel.setLayoutData(new GridData(SWT.RIGHT, SWT.CENTER, false, false, 1, 1));
-				packageNameLabel.setText("&Package name:");
-				
-				packageNameText = new Text(container, SWT.BORDER);
-				GridData gd_packageNameText = new GridData(SWT.FILL, SWT.CENTER, true, false, 1, 1);
-				gd_packageNameText.widthHint = 209;
-				packageNameText.setText("com.example");
-				packageNameText.setLayoutData(gd_packageNameText);
-				packageNameText.addModifyListener(new ModifyListener() {
-					public void modifyText(ModifyEvent e) {dialogChanged();}
-				});
-				
-				Label targetApiLabel = new Label(container, SWT.NONE);
-				targetApiLabel.setLayoutData(new GridData(SWT.RIGHT, SWT.CENTER, false, false, 1, 1));
-				targetApiLabel.setText("&Target Api:");
-				
-				targetApiCombo  = new Combo(container, SWT.READ_ONLY);
-				final String[] apiTargets = getApiTargets();
-				targetApiCombo.setItems(apiTargets);
-				targetApiCombo.select(apiTargets.length - 1);
-				
-				Label gitRepositoryLabel = new Label(container, SWT.NONE);
-				gitRepositoryLabel.setText("&Git repository:");
-				
-				gitRepositoryText = new Text(container, SWT.BORDER | SWT.READ_ONLY);
-				gitRepositoryText.setEnabled(false);
-				GridData gd_gitRepositoryText = new GridData(SWT.LEFT, SWT.CENTER, false, false, 2, 1);
-				gd_gitRepositoryText.widthHint = 277;
-				gitRepositoryText.setLayoutData(gd_gitRepositoryText);
-				
-				Button pasteFromClipboardButton = new Button(container, SWT.NONE);
-				pasteFromClipboardButton.setText("Paste from &clipboard");
-				pasteFromClipboardButton.setLayoutData(new GridData(SWT.FILL, SWT.CENTER, false, false, 1, 1));
-				
-				pasteFromClipboardButton.setImage(Activator
-						.getImageDescriptor("paste.png").createImage());
-				final Clipboard cb = new Clipboard(getShell().getDisplay());
-				pasteFromClipboardButton.addSelectionListener(new SelectionAdapter() {
-					@Override
-					public void widgetSelected(SelectionEvent e) {
-						final TextTransfer transfer = TextTransfer.getInstance();
-						String data = (String)cb.getContents(transfer);
-						if (data != null)
-							try {
-								if (!data.startsWith("git@"))
-									new URL(data).openConnection().connect();
-								gitRepositoryText.setText(data);
-							} catch (Exception e1) {e1.printStackTrace();;}
-					}
-				});
-				
-			}
-		};
-		
-		wizardPage.setTitle("New Android Application");
-		wizardPage.setInitialProjectName("MyApplication");
-		wizardPage.setDescription("This wizard creates a new empty Android Application.\n" +
-				"Also you can specify existing GIT-repository for CVS-integration.");
-		wizardPage.setImageDescriptor(Activator.getImageDescriptor("android_app.png"));
-		addPage(wizardPage);
-		
-		// XXX It really necessary?
-		//Activator.getDefault().setDebugging(false);
-		
-		// TODO Remove this tests
-		mMessageConsoleStream.println(Activator.getDefault().getBundle().getResource("files").toString());
-		final Enumeration<String> files = Activator.getDefault().getBundle().getEntryPaths("/files/");
-		
-		while(files.hasMoreElements())
-			mMessageConsoleStream.println((String) files.nextElement());
-		
-	}
-		
-	/**
-	 * Validates the fields on the form. If you add more fields that are
-	 * required, make sure to put the checks in here.
-	 */
-	private void dialogChanged() {
-		final String fileName = wizardPage.getProjectHandle().getName();
-		final IResource container = ResourcesPlugin.getWorkspace().getRoot()
-				.findMember(new Path(fileName));
-		
-		if (container != null
-				&& ((container.getType() & (IResource.PROJECT | IResource.FOLDER)) == 1)) {
-			updateStatus("Project " + fileName.substring(1) + " already exist");
-			return;
-		}
-		if (fileName.length() == 0) {
-			updateStatus("Project name must be specified");
-			return;
-		}
-		if (fileName.replace('\\', '/').indexOf('/', 1) > 0) {
-			updateStatus("Project name must be valid");
-			return;
-		}
-		
-		final String packageName = packageNameText.getText();
-		if (packageName.length() == 0) {
-			updateStatus("Package name must be specified");
-			return;
-		}
-		
-		if (!packageName.matches(REGEXP_PACKAGE_NAME)) {
-			updateStatus("Project name must be valid");
-			return;
-		}
-		
-		updateStatus(null);
-	}
-
-	/** @param message for update wizard status */
-	private void updateStatus(String message) {
-		wizardPage.setErrorMessage(message);
-		wizardPage.setPageComplete(message == null);
-	}
-
 	/**
 	 * This method is called when 'Finish' button is pressed in
 	 * the wizard. We will create an operation and run it
@@ -310,23 +159,28 @@ IExecutableExtension {
 		
 		if (project != null) return true;
 
-		final IProject projectHandle = wizardPage.getProjectHandle();
+		final IProject projectHandle = mWizardPage.getProjectHandle();
 		final IWorkspace workspace = ResourcesPlugin.getWorkspace();
 		
 		
 		final String projectName = projectHandle.getName();
 		final String tempProject = projectName + TEMP_PREFFIX;
 		final String projectNameLowerCase = projectName.toLowerCase(Locale.getDefault());
-		final String packageName = packageNameText.getText() + "." +
-				projectNameLowerCase;
-		final String targetApi = targetApiCombo.getText();
-		final String gitRepository = gitRepositoryText.getText();
+		final String packageName = mWizardPage.getPackageName() + "." +	projectNameLowerCase;
+		final String targetApi = mWizardPage.getTargetApi();
+		final String gitRepository = mWizardPage.getGitRepository();
+		final String login = mWizardPage.getGitUserName();
+		final String password = mWizardPage.getGitUserPassword();
+		final String user = mWizardPage.getGitAuthorName();
+		final String email = mWizardPage.getGitAuthorEmail();
+		final String gitBranch = mWizardPage.getGitBranch();
+		final String commitMessage = mWizardPage.getGitCommitMessage();
 		
 		final IProjectDescription description = workspace
 				.newProjectDescription(projectHandle.getName());
 		
-		final URI projectURI = (!wizardPage.useDefaults()) ? wizardPage
-				.getLocationURI() : null;
+		final URI projectURI = (!mWizardPage.useDefaults()) ?
+				mWizardPage.getLocationURI() : null;
 				
 		description.setLocationURI(projectURI);
 		description.setNatureIds(NATURES);
@@ -344,7 +198,9 @@ IExecutableExtension {
 					throws CoreException {
 				createProject(description, projectHandle, monitor,
 						projectName, projectNameLowerCase, packageName,
-						targetApi, tempProject, gitRepository);
+						targetApi, tempProject,
+						gitRepository, login, password, user, email,
+						gitBranch, commitMessage);
 			}
 		};
 
@@ -387,26 +243,28 @@ IExecutableExtension {
 	 * @throws CoreException	causes if anything was failed
 	 * @throws OperationCanceledException causes after user-cancel action
 	 */
+	@SuppressWarnings("deprecation")
 	void createProject(IProjectDescription description, IProject proj, IProgressMonitor monitor,
 			String projectName,
 			String projectNameLC,
 			String packageName,
 			String targetApi,
 			String tempProject,
-			String gitRepository) throws CoreException,
+			String gitRepository,
+			String gitLogin,
+			String gitPassword,
+			String gitName,
+			String gitEmail,
+			String gitBranch,
+			String gitMessage) throws CoreException,
 			OperationCanceledException {
 		try {
 			monitor.beginTask("", 2000);
 			
-			//TODO We really need this ?
-			//final String tempProjectPath = new File(tempProject).getAbsolutePath();
 			
 			proj.create(description, new SubProgressMonitor(monitor, 1000));
+			proj.open(IResource.BACKGROUND_REFRESH, new SubProgressMonitor(monitor, 1000));
 			
-			proj.open(IResource.BACKGROUND_REFRESH, new SubProgressMonitor(
-					monitor, 1000));
-			
-			//TODO We really need this ?
 			/*try {proj.setDefaultCharset("UTF-8", monitor);}
 			catch (CoreException e) {e.printStackTrace();}*/
 			
@@ -418,85 +276,47 @@ IExecutableExtension {
 			 * before updating the perspective.
 			 */
 			final IContainer container = (IContainer) proj;
-			
-			
-			/*InputStream inputStream = null;
-			addFileToProject(null, inputStream, proj, monitor);*/
-			
+
 			createFolders(packageName, container, monitor);
-
-			
-			try {
-				mCloneBatFile = FileLocator.toFileURL(this.getClass()
-						.getResource("root/clone.bat")).getFile().substring(1);
-				mCommitBatFile = FileLocator.toFileURL(this.getClass()
-						.getResource("root/commit.bat")).getFile().substring(1);
-			} catch (IOException e) {callCrash(e);}
-			
-			/*inputStream = this.getClass().getResourceAsStream("root/classpath");
-			addFileToProject(container, new Path(".classpath"), inputStream, monitor);
-			inputStream.close();
-			
-			/*inputStream = ResourcesRoot.class.getResourceAsStream("settings/org.eclipse.jdt.core.prefs");
-			addFileToProject(container, new Path(settingsFolder.getName()
-					+ File.separator + "org.eclipse.jdt.core.prefs"),
-					inputStream, monitor);
-			inputStream.close();
-			
-			inputStream = ResourcesRoot.class.getResourceAsStream("settings/org.eclipse.core.runtime.prefs");
-			addFileToProject(container, new Path(settingsFolder.getName()
-					+ File.separator + "org.eclipse.core.runtime.prefs"),
-					inputStream, monitor);
-			inputStream.close();*/
-			
-			/*inputStream = this.getClass().getResourceAsStream("root/gitignore");
-			addFileToProject(container, new Path(".gitignore"), inputStream, monitor);
-			inputStream.close();
-			
-			inputStream = this.getClass().getResourceAsStream("root/project.properties");
-			inputStream = openContentStream(KEY_TARGET_API, targetApi, inputStream);
-			addFileToProject(container, new Path("project.properties"), inputStream, monitor);
-			inputStream.close();
-			
-			inputStream = this.getClass().getResourceAsStream("root/proguard-project.txt");
-			inputStream = openContentStream(KEY_PACKAGE_NAME, packageName, inputStream);
-			addFileToProject(container, new Path("proguard-project.txt"), inputStream, monitor);
-			inputStream.close();
-			
-			inputStream = this.getClass().getResourceAsStream("root/ant.properties");
-			inputStream = openContentStream(KEY_PROJECT_NAME, projectName, inputStream);
-			addFileToProject(container, new Path("ant.properties"), inputStream, monitor);
-			inputStream.close();
-			
-			inputStream = this.getClass().getResourceAsStream("root/build.xml");
-			inputStream = openContentStream(KEY_PROJECT_NAME, projectName, inputStream);
-			addFileToProject(container, new Path("build.xml"), inputStream, monitor);
-			inputStream.close();
-			
-			inputStream = this.getClass().getResourceAsStream("root/build-evolution.bat");
-			addFileToProject(container, new Path("build-evolution.bat"), inputStream, monitor);
-			inputStream.close();
-
-			inputStream = this.getClass().getResourceAsStream("root/build-release.bat");
-			inputStream = openContentStream(KEY_PROJECT_NAME, projectName, inputStream);
-			addFileToProject(container, new Path("build-release.bat"), inputStream, monitor);
-			inputStream.close();
-			
-			inputStream = this.getClass().getResourceAsStream("root/gource.cfg");
-			addFileToProject(container, new Path("gource.cfg"), inputStream, monitor);
-			inputStream.close();
 			
 			final String pathPackage = packageName.replace(".", "/");
+
+			addFileToProject("settings/org.eclipse.jdt.core.prefs", ".settings/org.eclipse.core.runtime.prefs",
+					container, monitor);
 			
-			inputStream = this.getClass().getResourceAsStream("root/javadoc.xml");
-			inputStream = openContentStream(KEY_PROJECT_NAME, projectName,
-					KEY_PACKAGE_NAME, packageName, KEY_PACKAGE_PATH, pathPackage, inputStream);
-			addFileToProject(container, new Path("javadoc.xml"), inputStream, monitor);
-			inputStream.close();
+			addFileToProject("AndroidManifest.xml", "AndroidManifest.xml",
+					KEY_PROJECT_NAME, projectName,
+					KEY_PACKAGE_NAME, packageName, KEY_API_LEVEL,
+					targetApi.substring(targetApi.length() - 2),
+					container, monitor);
 			
-			/*inputStream = this.getClass().getResourceAsStream("root/keystore.sig");
-			addFileToProject(container, new Path("keystore.sig"), inputStream, monitor);
-			inputStream.close();*/
+			addFileToProject("ant.properties", "ant.properties",
+					KEY_PROJECT_NAME, projectName,
+					container, monitor);
+			addFileToProject("build-evolution.bat", "build-evolution.bat", container, monitor);
+			addFileToProject("build-release.bat", "build-release.bat",
+					KEY_PROJECT_NAME, projectName,
+					container, monitor);
+			addFileToProject("build.xml", "build.xml",
+					KEY_PROJECT_NAME, projectName,
+					container, monitor);
+
+			addFileToProject("classpath", ".classpath", container, monitor);
+			addFileToProject("gitignore", ".gitignore", container, monitor);
+			addFileToProject("gource.cfg", "gource.cfg", container, monitor);
+			
+			addFileToProject("javadoc.xml", "javadoc.xml",
+					KEY_PROJECT_NAME, projectName,
+					KEY_PACKAGE_NAME, packageName,
+					KEY_PACKAGE_PATH, pathPackage,
+					container, monitor);
+
+			addFileToProject("proguard-project.txt", "proguard-project.txt",
+					KEY_PACKAGE_NAME, packageName,
+					container, monitor);
+			addFileToProject("project.properties", "project.properties",
+					KEY_TARGET_API, targetApi,
+					container, monitor);
 			
 			Map<String, String> environment = System.getenv();
 			
@@ -512,68 +332,84 @@ IExecutableExtension {
 			if (File.separator.equals(winSeparator))
 				sdkPath = sdkPath.replace(winSeparator, doubleSeparator);
 						
-			/*inputStream = this.getClass().getResourceAsStream("root/local.properties");
-			inputStream = openContentStream(KEY_SDK_PATH, sdkPath, inputStream);
-			addFileToProject(container, new Path("local.properties"), inputStream, monitor);
-			inputStream.close();
+			addFileToProject("local.properties", "local.properties",
+					KEY_SDK_PATH, sdkPath,
+					container, monitor);
 			
-			inputStream = ResourcesRoot.class.getResourceAsStream("res/mipmap_ldpi/ic_launcher.png");
-			addFileToProject(container, new Path("res/mipmap-ldpi/ic_launcher.png"), inputStream, monitor);
-			inputStream.close();
-			
-			inputStream = ResourcesRoot.class.getResourceAsStream("res/mipmap_mdpi/ic_launcher.png");
-			addFileToProject(container, new Path("res/mipmap-mdpi/ic_launcher.png"), inputStream, monitor);
-			inputStream.close();
-			
-			inputStream = ResourcesRoot.class.getResourceAsStream("res/mipmap_hdpi/ic_launcher.png");
-			addFileToProject(container, new Path("res/mipmap-hdpi/ic_launcher.png"), inputStream, monitor);
-			inputStream.close();
-			
-			inputStream = ResourcesRoot.class.getResourceAsStream("res/mipmap_xhdpi/ic_launcher.png");
-			addFileToProject(container, new Path("res/mipmap-xhdpi/ic_launcher.png"), inputStream, monitor);
-			inputStream.close();
-			
-			inputStream = ResourcesRoot.class.getResourceAsStream("res/mipmap_xxhdpi/ic_launcher.png");
-			addFileToProject(container, new Path("res/mipmap-xxhdpi/ic_launcher.png"), inputStream, monitor);
-			inputStream.close();
-			
-			inputStream = ResourcesRoot.class.getResourceAsStream("res/mipmap_xxxhdpi/ic_launcher.png");
-			addFileToProject(container, new Path("res/mipmap-xxxhdpi/ic_launcher.png"), inputStream, monitor);
-			inputStream.close();
-			
-			inputStream = ResourcesRoot.class.getResourceAsStream("res/layout/activity_main.xml");
-			addFileToProject(container, new Path("res/layout/activity_main.xml"), inputStream, monitor);
-			inputStream.close();
-			
-			inputStream = ResourcesRoot.class.getResourceAsStream("res/values/strings.xml");
-			inputStream = openContentStream(KEY_PROJECT_NAME, projectName, inputStream);
-			addFileToProject(container, new Path("res/values/strings.xml"), inputStream, monitor);
-			inputStream.close();
-
-			inputStream = ResourcesRoot.class.getResourceAsStream("res/values/styles.xml");
-			inputStream = openContentStream(KEY_PROJECT_NAME, projectName, inputStream);
-			addFileToProject(container, new Path("res/values/styles.xml"), inputStream, monitor);
-			inputStream.close();
-
-			inputStream = ResourcesRoot.class.getResourceAsStream("res/values/themes.xml");
-			inputStream = openContentStream(KEY_PROJECT_NAME, projectName, inputStream);
-			addFileToProject(container, new Path("res/values/themes.xml"), inputStream, monitor);
-			inputStream.close();
-			
-			inputStream = this.getClass().getResourceAsStream("root/AndroidManifest.xml");
-			inputStream = openContentStream(KEY_PROJECT_NAME, projectName,
-					KEY_PACKAGE_NAME, packageName, KEY_API_LEVEL,
-					targetApi.substring(targetApi.length() - 2), inputStream);
-			addFileToProject(container, new Path("AndroidManifest.xml"), inputStream, monitor);
+			/*inputStream = this.getClass().getResourceAsStream("root/keystore.sig");
+			addFileToProject(container, new Path("keystore.sig"), inputStream, monitor);
 			inputStream.close();*/
+			
+			addFileToProject("res/mipmap-ldpi/ic_launcher.png",
+					"res/mipmap-ldpi/ic_launcher.png", container, monitor);
+			
+			addFileToProject("res/mipmap-mdpi/ic_launcher.png",
+					"res/mipmap-mdpi/ic_launcher.png", container, monitor);
+			
+			addFileToProject("res/mipmap-hdpi/ic_launcher.png",
+					"res/mipmap-hdpi/ic_launcher.png", container, monitor);
+			
+			addFileToProject("res/mipmap-xhdpi/ic_launcher.png",
+					"res/mipmap-xhdpi/ic_launcher.png", container, monitor);
+			
+			addFileToProject("res/mipmap-xxhdpi/ic_launcher.png",
+					"res/mipmap-xxhdpi/ic_launcher.png", container, monitor);
+			
+			addFileToProject("res/mipmap-xxxhdpi/ic_launcher.png",
+					"res/mipmap-xxxhdpi/ic_launcher.png", container, monitor);
+			
+			addFileToProject("res/layout/activity_main.xml",
+					"res/layout/activity_main.xml", container, monitor);
+			
+			addFileToProject("res/values/strings.xml", "res/values/strings.xml",
+					KEY_PROJECT_NAME, projectName,
+					container, monitor);
+			addFileToProject("res/values/styles.xml", "res/values/styles.xml",
+					KEY_PROJECT_NAME, projectName,
+					container, monitor);
+			addFileToProject("res/values/themes.xml", "res/values/themes.xml",
+					KEY_PROJECT_NAME, projectName,
+					container, monitor);
 
 			String license = "";
+			
+			final String home = System.getProperty("user.home");
+			
+			final SSHConfigCallback sshConfigCallback =
+					new SSHConfigCallback(gitPassword, home + Path.SEPARATOR + ".ssh" +
+															Path.SEPARATOR + "id_rsa");
+			
 			if(gitRepository != null && gitRepository.length() != 0) {
-				System.out.println("Result: " +
-						exec(String.format(LOCALE, CLONE_COMMAND_WINDOWS,
-								mCloneBatFile, gitRepository, tempProject,
-								proj.getLocation().toString())));
+				try {
 					
+					final CloneCommand cloneCommand =
+							Git.cloneRepository().setURI(gitRepository)
+					.setDirectory(new File(tempProject));
+					
+					if (gitLogin != null && !gitLogin.isEmpty())
+						cloneCommand.setCredentialsProvider(
+							new UsernamePasswordCredentialsProvider(gitLogin, gitPassword));
+					else
+						cloneCommand.setTransportConfigCallback(sshConfigCallback);
+					
+					cloneCommand.call().checkout().setCreateBranch(true).setName(gitBranch).call();
+
+					Files.copy(new File(tempProject + "/README.md").toPath(),
+							new File(proj.getLocation().toString() + "/README.md").toPath(),
+						StandardCopyOption.COPY_ATTRIBUTES);
+					Files.copy(new File(tempProject + "/LICENSE").toPath(),
+							new File(proj.getLocation().toString() + "/LICENSE").toPath(),
+						StandardCopyOption.COPY_ATTRIBUTES);
+					final java.nio.file.Path gitPath = new File(tempProject + "/.git").toPath();
+					Files.walkFileTree(gitPath, EnumSet.of(FileVisitOption.FOLLOW_LINKS),
+					          Integer.MAX_VALUE, new CopyDirectory(gitPath,
+					        		  new File(proj.getLocation().toString() + "/.git").toPath()));
+					
+					Files.walkFileTree(new File(tempProject).toPath(), EnumSet.of(FileVisitOption.FOLLOW_LINKS),
+					          Integer.MAX_VALUE, new DeleteFilesVisitor());
+					
+				} catch (GitAPIException | IOException e) {logln(e.getLocalizedMessage());}
+				
 				description = proj.getDescription();
 				description.setComment(extractComments(new File(proj.getLocation().toString(), "README.md")));
 				proj.setDescription(description, monitor);
@@ -589,79 +425,79 @@ IExecutableExtension {
 			System.out.println("Name: " + userName);
 			System.out.println("Date: " + date);
 			
-			/*inputStream = ResourcesRoot.class.getResourceAsStream("src/package-info.java.src");
-			inputStream = openContentStream(
+			addFileToProject("src/package-info.java.src", "/src/" + pathPackage + "/package-info.java",
 					KEY_PROJECT_NAME, projectName,
 					KEY_LICENSE, license,
 					KEY_DATE, date,
 					KEY_PACKAGE_NAME, packageName,
 					KEY_AUTHOR, userName,
-					inputStream);
-			addFileToProject(container, new Path(packagePath + "/package-info.java"), inputStream, monitor);
-			inputStream.close();
+					container, monitor);
 			
-			inputStream = ResourcesRoot.class.getResourceAsStream("src/App.java.src");
-			inputStream = openContentStream(
+			addFileToProject("src/App.java.src", "/src/" + pathPackage + "/App.java",
 					KEY_PROJECT_NAME, projectName,
 					KEY_LICENSE, license,
 					KEY_DATE, date,
 					KEY_PACKAGE_NAME, packageName,
 					KEY_AUTHOR, userName,
-					inputStream);
-			addFileToProject(container, new Path(packagePath + "/App.java"), inputStream, monitor);
-			inputStream.close();
+					container, monitor);
 			
-			inputStream = ResourcesRoot.class.getResourceAsStream("src/app/package-info.java.src");
-			inputStream = openContentStream(
+			addFileToProject("src/app/package-info.java.src", "/src/" + pathPackage + "/app/package-info.java",
 					KEY_PROJECT_NAME, projectName,
 					KEY_LICENSE, license,
 					KEY_DATE, date,
 					KEY_PACKAGE_NAME, packageName,
 					KEY_AUTHOR, userName,
-					inputStream);
-			addFileToProject(container, new Path(packagePath + "/app/package-info.java"), inputStream, monitor);
-			inputStream.close();
+					container, monitor);
 			
-			inputStream = ResourcesRoot.class.getResourceAsStream("src/app/MainActivity.java.src");
-			inputStream = openContentStream(
+			addFileToProject("src/app/MainActivity.java.src", "/src/" + pathPackage + "/app/MainActivity.java",
 					KEY_PROJECT_NAME, projectName,
 					KEY_LICENSE, license,
 					KEY_DATE, date,
 					KEY_PACKAGE_NAME, packageName,
 					KEY_AUTHOR, userName,
-					inputStream);
-			addFileToProject(container, new Path(packagePath + "/app/MainActivity.java"), inputStream, monitor);
-			inputStream.close();
+					container, monitor);
 			
-			inputStream = ResourcesRoot.class.getResourceAsStream("src/utils/package-info.java.src");
-			inputStream = openContentStream(
+			addFileToProject("src/utils/package-info.java.src", "/src/" + pathPackage + "/utils/package-info.java",
 					KEY_PROJECT_NAME, projectName,
 					KEY_LICENSE, license,
 					KEY_DATE, date,
 					KEY_PACKAGE_NAME, packageName,
 					KEY_AUTHOR, userName,
-					inputStream);
-			addFileToProject(container, new Path(packagePath + "/utils/package-info.java"), inputStream, monitor);
-			inputStream.close();
+					container, monitor);
 			
-			inputStream = ResourcesRoot.class.getResourceAsStream("src/utils/Utils.java.src");
-			inputStream = openContentStream(
+			addFileToProject("src/utils/Utils.java.src", "/src/" + pathPackage + "/utils/Utils.java",
 					KEY_PROJECT_NAME, projectName,
 					KEY_LICENSE, license,
 					KEY_DATE, date,
 					KEY_PACKAGE_NAME, packageName,
 					KEY_AUTHOR, userName,
-					inputStream);
-			addFileToProject(container, new Path(packagePath + "/utils/Utils.java"), inputStream, monitor);
-			inputStream.close();*/
+					container, monitor);
 			
 			if(gitRepository != null && gitRepository.length() != 0)
-				System.out.println("Result: " +
-						exec(String.format(LOCALE, COMMIT_COMMAND_WINDOWS,
-								mCommitBatFile,
-								proj.getLocation().toString())));
+				try {
+					final Repository repository =
+							new FileRepository(proj.getLocation().toString() + "/.git");
+					final Git git = new Git(repository);
+					
+					git.add().addFilepattern(".").call();
+					git.commit().setAll(true).setAuthor(gitName, gitEmail).setCommitter(gitName, gitEmail)
+					.setMessage(gitMessage).call();
+					final PushCommand pushCommand = git.push()
+							.setRemote("origin").setPushAll();
+					
+					if (gitLogin != null && !gitLogin.isEmpty())
+						pushCommand.setCredentialsProvider(
+							new UsernamePasswordCredentialsProvider(gitLogin, gitPassword));
+					else
+						pushCommand.setTransportConfigCallback(sshConfigCallback);
+					
+					pushCommand.call();
+					git.close();
+				} catch (IOException | GitAPIException e) {logln(e.getLocalizedMessage());}
+
+
 			
-		} finally {	monitor.done();}
+		} finally {monitor.done();}
 	}
 	
 	/**
@@ -688,22 +524,6 @@ IExecutableExtension {
 		
 		return packagePath;
 		
-	}
-	
-	/**
-	 * Create source folder in project.
-	 * 
-	 * @param packagePath	the src-root path 
-	 * @param folderPath	path to folder in src	
-	 * @param project		project container
-	 * @param monitor		monitor async operation
-	 * 
-	 * @throws CoreException causes when anything was failed
-	 */
-	private final void createSrcFolder(String packagePath, String folderPath,
-			IContainer project, IProgressMonitor monitor) throws CoreException {
-		project.getFolder(new Path(packagePath + File.separator + folderPath))
-		.create(true, true, monitor);
 	}
 	
 	/**
@@ -747,6 +567,7 @@ IExecutableExtension {
 	 * @return result of executing
 	 * @throws CoreException causes when anything was failed
 	 */
+	@SuppressWarnings("unused")
 	private static final int exec(String command) throws CoreException {
 		int result = -1;
 		try {result = Runtime.getRuntime().exec(command).waitFor();}
@@ -785,65 +606,89 @@ IExecutableExtension {
 	private final void addFileToProject(String filePath, InputStream contentStream,
 			IContainer project, IProgressMonitor monitor)
 			throws CoreException {
+		try {logln(filePath + " - " + contentStream.available());}
+		catch (IOException e) {logln(e.getLocalizedMessage());}
 		project.getFile(new Path(filePath)).create(contentStream, true, monitor);
 	}
 	
 	/**
 	 * Put new file to project by key-values.
 	 * 
-	 * @param filePath		path of file
+	 * @param dstFile		path of file
 	 * @param contentStream	content of file
 	 * 
 	 * @param project project container
 	 * @param monitor for async-operation
 	 * @throws CoreException causes if anything was failed
 	 */
-	private final void addFileToProject(InputStream contentStream, String filePath,
+	private final void addFileToProject(String srcFile, String dstFile,
+			IContainer project, IProgressMonitor monitor)
+			throws CoreException {
+		try {
+			final InputStream inputStream = Activator.getDefault().getBundle().getEntry("/files/" + srcFile).openStream();
+			addFileToProject(dstFile, inputStream, project, monitor);
+			try {inputStream.close();} catch (IOException e) {callCrash(e);}
+		} catch (IOException e) {callCrash(e);}
+	}
+
+	
+	/**
+	 * Put new file to project by key-values.
+	 * 
+	 * @param srcFile source file name
+	 * @param dstFile destination file name
+	 * 
+	 * @param project project container
+	 * @param monitor for async-operation
+	 * @throws CoreException causes if anything was failed
+	 */
+	private final void addFileToProject(String srcFile, String dstFile,
 			String key, String value,
 			IContainer project, IProgressMonitor monitor)
 			throws CoreException {
-		InputStream inputStream = this.getClass()
-				.getResourceAsStream("root/" + filePath);
-		inputStream = openContentStream(key, value, inputStream);
-		addFileToProject(filePath, inputStream, project, monitor);
-		try {inputStream.close();} catch (IOException e) {callCrash(e);}
+		try {
+			final InputStream inputStream = openContentStream(key, value,
+					Activator.getDefault().getBundle().getEntry("/files/" + srcFile).openStream());
+			addFileToProject(dstFile, inputStream, project, monitor);
+			try {inputStream.close();} catch (IOException e) {callCrash(e);}
+		} catch (IOException e) {callCrash(e);}
 	}
 	
 	/**
 	 * Put new file to project by key-values.
 	 * 
-	 * @param filePath		path of file
-	 * @param contentStream	content of file
+	 * @param srcFile source file name
+	 * @param dstFile destination file name
 	 * 
 	 * @param project project container
 	 * @param monitor for async-operation
 	 * @throws CoreException causes if anything was failed
 	 */
-	private final void addFileToProject(InputStream contentStream, String filePath,
+	private final void addFileToProject(String srcFile, String dstFile,
 			String key1, String value1,
 			String key2, String value2,
 			String key3, String value3,
 			IContainer project, IProgressMonitor monitor)
 			throws CoreException {
-		InputStream inputStream = this.getClass()
-				.getResourceAsStream("root/" + filePath);
-		inputStream = openContentStream(key1, value1, key2, value2,
-				key3, value3, inputStream);
-		addFileToProject(filePath, inputStream, project, monitor);
-		try {inputStream.close();} catch (IOException e) {callCrash(e);}
+		try {
+			final InputStream inputStream = openContentStream(key1, value1, key2, value2, key3, value3,
+					Activator.getDefault().getBundle().getEntry("/files/" + srcFile).openStream());
+			addFileToProject(dstFile, inputStream, project, monitor);
+			try {inputStream.close();} catch (IOException e) {callCrash(e);}
+		} catch (IOException e) {callCrash(e);}
 	}
 	
 	/**
 	 * Put new file to project by key-values.
 	 * 
-	 * @param filePath		path of file
-	 * @param contentStream	content of file
+	 * @param srcFile source file name
+	 * @param dstFile destination file name
 	 * 
 	 * @param project project container
 	 * @param monitor for async-operation
 	 * @throws CoreException causes if anything was failed
 	 */
-	private final void addFileToProject(InputStream contentStream, String filePath,
+	private final void addFileToProject(String srcFile, String dstFile,
 			String key1, String value1,
 			String key2, String value2,
 			String key3, String value3,
@@ -851,12 +696,13 @@ IExecutableExtension {
 			String key5, String value5,
 			IContainer project, IProgressMonitor monitor)
 			throws CoreException {
-		InputStream inputStream = this.getClass()
-				.getResourceAsStream("root/" + filePath);
-		inputStream = openContentStream(key1, value1, key2, value2,
-				key3, value3, key4, value4, key5, value5,inputStream);
-		addFileToProject(filePath, inputStream, project, monitor);
-		try {inputStream.close();} catch (IOException e) {callCrash(e);}
+		try {
+			final InputStream inputStream = openContentStream(key1, value1, key2, value2, key3, value3,
+					key4, value4, key5, value5,
+					Activator.getDefault().getBundle().getEntry("/files/" + srcFile).openStream());
+			addFileToProject(dstFile, inputStream, project, monitor);
+			try {inputStream.close();} catch (IOException e) {callCrash(e);}
+		} catch (IOException e) {callCrash(e);}
 	}
 	
 	/**
@@ -973,7 +819,6 @@ IExecutableExtension {
 	}
 
 	/** @param message the message for log to new line */
-	@SuppressWarnings("unused")
 	private final void logln(String message) {
 		if (mMessageConsoleStream == null) return;
 		mMessageConsoleStream.println(message);
@@ -1065,32 +910,6 @@ IExecutableExtension {
 		return builder.toString();
 	}
 
-	/** @return available android api targets */
-	private static final String[] getApiTargets() {
-		
-		String[] result = null;
-		try {
-			final Process process =
-					
-					//Runtime.getRuntime().exec("cmd /c start /wait " + EXEC_ANDROID_LIST_TARGETS);
-					Runtime.getRuntime().exec(EXEC_ANDROID_LIST_TARGETS);
-			process.waitFor();
-			final BufferedReader bufferedReader =
-					new BufferedReader(new InputStreamReader(process.getInputStream()));
-			final ArrayList<String> targets = new ArrayList<String>();
-			String line = null;
-			try {
-				while ((line = bufferedReader.readLine()) != null)
-					if (line.startsWith("id: "))
-						targets.add(line.substring(
-								line.indexOf("\"") + 1, line.length() - 1));
-				result = targets.toArray(new String[targets.size()]);
-			} catch (IOException e) {e.printStackTrace();}
-		      
-		    bufferedReader.close();
-		} catch (IOException | InterruptedException e) {e.printStackTrace();}
-		return result;
-	}
 
 	/** @return Default user name specified as runtime eclipse option. */
 	/** @return current user name */
@@ -1133,5 +952,150 @@ IExecutableExtension {
 				new Locale(getLanguage()))
 				.format(new Date(System.currentTimeMillis()));
 	}
+	
+	/**
+	 * The simple file visitor for git-dir copy.
+	 * 
+	 * @author Nikitenko Gleb
+	 */
+	private static final class CopyDirectory extends SimpleFileVisitor<java.nio.file.Path> {
+		
+		/**	Source directory */
+		private final java.nio.file.Path mSource;
+		/**	Target directory */
+		private final java.nio.file.Path mTarget;
+
+		/** Creates new file visitor */
+		CopyDirectory(java.nio.file.Path source, java.nio.file.Path target) {
+			mSource = source; mTarget = target;
+		}
+		
+		/* (non-Javadoc)
+		 * @see java.nio.file.SimpleFileVisitor#
+		 * visitFile(java.lang.Object, java.nio.file.attribute.BasicFileAttributes)
+		 */
+		@Override
+		public final FileVisitResult visitFile(java.nio.file.Path file, BasicFileAttributes attrs) throws IOException {
+			Files.copy(file, mTarget.resolve(mSource.relativize(file)));
+		    return FileVisitResult.CONTINUE;
+		}
+		
+		/* (non-Javadoc)
+		 * @see java.nio.file.SimpleFileVisitor
+		 * #preVisitDirectory(java.lang.Object, java.nio.file.attribute.BasicFileAttributes)
+		 */
+		@Override
+		public final FileVisitResult preVisitDirectory(java.nio.file.Path dir, BasicFileAttributes attrs) throws IOException {
+			final java.nio.file.Path targetDirectory = mTarget.resolve(mSource.relativize(dir));
+		    try {Files.copy(dir, targetDirectory);}
+		    catch (FileAlreadyExistsException e) {if (!Files.isDirectory(targetDirectory))throw e;}
+		    return FileVisitResult.CONTINUE;
+		}
+
+	}
+	
+	/**
+	 * The simple file visitor for temp-dir delete.
+	 * 
+	 * @author Nikitenko Gleb
+	 */
+	private static final class DeleteFilesVisitor extends SimpleFileVisitor<java.nio.file.Path> {
+		
+		/* (non-Javadoc)
+		 * @see java.nio.file.SimpleFileVisitor
+		 * #visitFile(java.lang.Object, java.nio.file.attribute.BasicFileAttributes)
+		 */
+		@Override
+		public final FileVisitResult visitFile(java.nio.file.Path file, BasicFileAttributes attrs) throws IOException {
+			//System.out.println("visit file - " + file.getFileName().toString() + " - " + file.toFile().delete());
+			while (!file.toFile().delete()) {try {Thread.sleep(200);} catch (InterruptedException e) {}}
+			return FileVisitResult.CONTINUE;
+		}
+		
+		/* (non-Javadoc)
+		 * @see java.nio.file.SimpleFileVisitor
+		 * #postVisitDirectory(java.lang.Object, java.io.IOException)
+		 */
+		@Override
+		public FileVisitResult postVisitDirectory(java.nio.file.Path dir, IOException exc) throws IOException {
+			if(exc != null) throw exc;
+			return FileVisitResult.CONTINUE;
+		}
+		
+		@Override
+		public FileVisitResult visitFileFailed(java.nio.file.Path file, IOException exc) throws IOException {
+	        exc.printStackTrace();
+	        return FileVisitResult.CONTINUE;
+		}
+	}
+	
+	/**
+	 * Custom Config Session Factory.
+	 * 
+	 * @author Nikitenko Gleb
+	 */
+	private class SSHConfigSessionFactory extends JschConfigSessionFactory {
+		
+		/**	Session password. */
+		private final String mPassword;
+		/**	Path to private ssh key. */
+		private final String mPrivateKeyPath;
+
+		/**	Creates new ssh config session factory. */
+		SSHConfigSessionFactory(String password, String keyPath) {mPassword = password; mPrivateKeyPath = keyPath;}
+
+		/* (non-Javadoc)
+		 * @see org.eclipse.jgit.transport.JschConfigSessionFactory
+		 * #configure(org.eclipse.jgit.transport.OpenSshConfig.Host, com.jcraft.jsch.Session)
+		 */
+		@Override
+		protected final void configure(Host host, Session session) {
+			session.setPassword(mPassword);
+		}
+		
+		/* (non-Javadoc)
+		 * @see org.eclipse.jgit.transport.JschConfigSessionFactory
+		 * #createDefaultJSch(org.eclipse.jgit.util.FS)
+		 */
+		@Override
+		protected final JSch createDefaultJSch(FS fs) throws JSchException {
+			final JSch defaultJSch = super.createDefaultJSch(fs);
+			defaultJSch.addIdentity(mPrivateKeyPath);
+			return defaultJSch;
+		}
+
+	}
+
+	/**
+	 * Custom SSH Config Transport
+	 * 
+	 * @author Nikitenko Gleb
+	 */
+	private final class SSHConfigCallback implements TransportConfigCallback {
+		
+		/**	SSH Session Factory. */
+		private final SSHConfigSessionFactory mSessionFactory;
+		
+		/**
+		 * Creates new SSH Config callback.
+		 * 
+		 * @param password ssh password
+		 * @param keyPath path to private ssh key.
+		 */
+		SSHConfigCallback(String password, String keyPath) {
+			mSessionFactory = new SSHConfigSessionFactory(password, keyPath);
+		}
+
+		/* (non-Javadoc)
+		 * @see org.eclipse.jgit.api.TransportConfigCallback
+		 * #configure(org.eclipse.jgit.transport.Transport)
+		 */
+		@Override
+		public final void configure(Transport transport) {
+			((SshTransport)transport).setSshSessionFactory(mSessionFactory);
+		}
+	
+	}
+
 
 }
