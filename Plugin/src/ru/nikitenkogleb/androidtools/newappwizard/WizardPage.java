@@ -38,6 +38,7 @@ import org.eclipse.ui.dialogs.WizardNewProjectCreationPage;
  */
 final class WizardPage extends WizardNewProjectCreationPage {
 	
+
 	/** Regular expression to validate package name field. */
 	private static final String REGEXP_PACKAGE_NAME =
 			"([\\p{L}_$][\\p{L}\\p{N}_$]*\\.)*[\\p{L}_$][\\p{L}\\p{N}_$]*";
@@ -86,7 +87,7 @@ final class WizardPage extends WizardNewProjectCreationPage {
 	/**	The content of git user name text label. */
 	private static final String LABEL_GIT_USER_NAME = "User:";
 	/**	The name of git user name by default. */
-	private static final String DEFAULT_GIT_USER_NAME = "Gleb Nikitenko";
+	private static final String DEFAULT_GIT_USER_NAME = "";
 	/**	The name of git user name by default(hint). */
 	private static final String MESSAGE_GIT_USER_NAME = "User name of your git-repository";
 

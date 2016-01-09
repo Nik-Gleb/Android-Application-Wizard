@@ -2,19 +2,6 @@ package ru.nikitenkogleb.androidtools.newappwizard;
 
 import org.eclipse.jface.viewers.IStructuredSelection;
 import org.eclipse.jface.wizard.Wizard;
-import org.eclipse.jgit.api.CloneCommand;
-import org.eclipse.jgit.api.Git;
-import org.eclipse.jgit.api.PushCommand;
-import org.eclipse.jgit.api.TransportConfigCallback;
-import org.eclipse.jgit.api.errors.GitAPIException;
-import org.eclipse.jgit.internal.storage.file.FileRepository;
-import org.eclipse.jgit.lib.Repository;
-import org.eclipse.jgit.transport.JschConfigSessionFactory;
-import org.eclipse.jgit.transport.OpenSshConfig.Host;
-import org.eclipse.jgit.transport.SshTransport;
-import org.eclipse.jgit.transport.Transport;
-import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
-import org.eclipse.jgit.util.FS;
 import org.eclipse.ui.INewWizard;
 import org.eclipse.ui.IWorkbench;
 import org.eclipse.ui.actions.WorkspaceModifyOperation;
@@ -28,16 +15,8 @@ import org.eclipse.core.runtime.*;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.nio.file.FileAlreadyExistsException;
-import java.nio.file.FileVisitOption;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.text.SimpleDateFormat;
 import java.util.Date;
-import java.util.EnumSet;
 import java.util.Locale;
 import java.util.Map;
 
@@ -49,9 +28,6 @@ import java.io.*;
 
 import org.eclipse.ui.wizards.newresource.BasicNewProjectResourceWizard;
 
-import com.jcraft.jsch.JSch;
-import com.jcraft.jsch.JSchException;
-import com.jcraft.jsch.Session;
 
 import ru.nikitenkogleb.androidtools.newappwizard.WizardPage.WizardCallback;
 
@@ -245,18 +221,12 @@ public class EmptyAppWizard extends Wizard implements INewWizard,
 	 */
 	@SuppressWarnings("deprecation")
 	void createProject(IProjectDescription description, IProject proj, IProgressMonitor monitor,
-			String projectName,
-			String projectNameLC,
-			String packageName,
-			String targetApi,
-			String tempProject,
+			String projectName,	String projectNameLC, String packageName,
+			String targetApi, String tempProject,
 			String gitRepository,
-			String gitLogin,
-			String gitPassword,
-			String gitName,
-			String gitEmail,
-			String gitBranch,
-			String gitMessage) throws CoreException,
+			String gitLogin, String gitPassword,
+			String gitName, String gitEmail,
+			String gitBranch, String gitMessage) throws CoreException,
 			OperationCanceledException {
 		try {
 			monitor.beginTask("", 2000);
@@ -281,8 +251,24 @@ public class EmptyAppWizard extends Wizard implements INewWizard,
 			
 			final String pathPackage = packageName.replace(".", "/");
 
-			addFileToProject("settings/org.eclipse.jdt.core.prefs", ".settings/org.eclipse.core.runtime.prefs",
+			String license = "";
+			
+			GitSupport gitSupport = new GitSupport(gitLogin, gitPassword,
+					gitRepository, proj.getLocation().toString(), tempProject, gitBranch);
+			
+			if (gitSupport.isSuccessful()) {
+				description = proj.getDescription();
+				description.setComment(extractComments(new File(proj.getLocation().toString(), "README.md")));
+				proj.setDescription(description, monitor);
+				license = extractLicense(new File(proj.getLocation().toString(), "LICENSE"));
+			}
+			
+			
+			addFileToProject("settings/org.eclipse.jdt.core.prefs", ".settings/org.eclipse.jdt.core.prefs",
 					container, monitor);
+			addFileToProject("settings/org.eclipse.core.runtime.prefs", ".settings/org.eclipse.core.runtime.prefs",
+					container, monitor);
+
 			
 			addFileToProject("AndroidManifest.xml", "AndroidManifest.xml",
 					KEY_PROJECT_NAME, projectName,
@@ -371,53 +357,6 @@ public class EmptyAppWizard extends Wizard implements INewWizard,
 					KEY_PROJECT_NAME, projectName,
 					container, monitor);
 
-			String license = "";
-			
-			final String home = System.getProperty("user.home");
-			
-			final SSHConfigCallback sshConfigCallback =
-					new SSHConfigCallback(gitPassword, home + Path.SEPARATOR + ".ssh" +
-															Path.SEPARATOR + "id_rsa");
-			
-			if(gitRepository != null && gitRepository.length() != 0) {
-				try {
-					
-					final CloneCommand cloneCommand =
-							Git.cloneRepository().setURI(gitRepository)
-					.setDirectory(new File(tempProject));
-					
-					if (gitLogin != null && !gitLogin.isEmpty())
-						cloneCommand.setCredentialsProvider(
-							new UsernamePasswordCredentialsProvider(gitLogin, gitPassword));
-					else
-						cloneCommand.setTransportConfigCallback(sshConfigCallback);
-					
-					cloneCommand.call().checkout().setCreateBranch(true).setName(gitBranch).call();
-
-					Files.copy(new File(tempProject + "/README.md").toPath(),
-							new File(proj.getLocation().toString() + "/README.md").toPath(),
-						StandardCopyOption.COPY_ATTRIBUTES);
-					Files.copy(new File(tempProject + "/LICENSE").toPath(),
-							new File(proj.getLocation().toString() + "/LICENSE").toPath(),
-						StandardCopyOption.COPY_ATTRIBUTES);
-					final java.nio.file.Path gitPath = new File(tempProject + "/.git").toPath();
-					Files.walkFileTree(gitPath, EnumSet.of(FileVisitOption.FOLLOW_LINKS),
-					          Integer.MAX_VALUE, new CopyDirectory(gitPath,
-					        		  new File(proj.getLocation().toString() + "/.git").toPath()));
-					
-					Files.walkFileTree(new File(tempProject).toPath(), EnumSet.of(FileVisitOption.FOLLOW_LINKS),
-					          Integer.MAX_VALUE, new DeleteFilesVisitor());
-					
-				} catch (GitAPIException | IOException e) {logln(e.getLocalizedMessage());}
-				
-				description = proj.getDescription();
-				description.setComment(extractComments(new File(proj.getLocation().toString(), "README.md")));
-				proj.setDescription(description, monitor);
-				
-				license = extractLicense(new File(proj.getLocation().toString(), "LICENSE"));
-				
-			}
-			
 			final String userName = getUserName();
 			final String date = getCurrentDate();
 			
@@ -473,29 +412,7 @@ public class EmptyAppWizard extends Wizard implements INewWizard,
 					KEY_AUTHOR, userName,
 					container, monitor);
 			
-			if(gitRepository != null && gitRepository.length() != 0)
-				try {
-					final Repository repository =
-							new FileRepository(proj.getLocation().toString() + "/.git");
-					final Git git = new Git(repository);
-					
-					git.add().addFilepattern(".").call();
-					git.commit().setAll(true).setAuthor(gitName, gitEmail).setCommitter(gitName, gitEmail)
-					.setMessage(gitMessage).call();
-					final PushCommand pushCommand = git.push()
-							.setRemote("origin").setPushAll();
-					
-					if (gitLogin != null && !gitLogin.isEmpty())
-						pushCommand.setCredentialsProvider(
-							new UsernamePasswordCredentialsProvider(gitLogin, gitPassword));
-					else
-						pushCommand.setTransportConfigCallback(sshConfigCallback);
-					
-					pushCommand.call();
-					git.close();
-				} catch (IOException | GitAPIException e) {logln(e.getLocalizedMessage());}
-
-
+			gitSupport.close(gitName, gitEmail, gitMessage);
 			
 		} finally {monitor.done();}
 	}
@@ -953,149 +870,6 @@ public class EmptyAppWizard extends Wizard implements INewWizard,
 				.format(new Date(System.currentTimeMillis()));
 	}
 	
-	/**
-	 * The simple file visitor for git-dir copy.
-	 * 
-	 * @author Nikitenko Gleb
-	 */
-	private static final class CopyDirectory extends SimpleFileVisitor<java.nio.file.Path> {
 		
-		/**	Source directory */
-		private final java.nio.file.Path mSource;
-		/**	Target directory */
-		private final java.nio.file.Path mTarget;
-
-		/** Creates new file visitor */
-		CopyDirectory(java.nio.file.Path source, java.nio.file.Path target) {
-			mSource = source; mTarget = target;
-		}
-		
-		/* (non-Javadoc)
-		 * @see java.nio.file.SimpleFileVisitor#
-		 * visitFile(java.lang.Object, java.nio.file.attribute.BasicFileAttributes)
-		 */
-		@Override
-		public final FileVisitResult visitFile(java.nio.file.Path file, BasicFileAttributes attrs) throws IOException {
-			Files.copy(file, mTarget.resolve(mSource.relativize(file)));
-		    return FileVisitResult.CONTINUE;
-		}
-		
-		/* (non-Javadoc)
-		 * @see java.nio.file.SimpleFileVisitor
-		 * #preVisitDirectory(java.lang.Object, java.nio.file.attribute.BasicFileAttributes)
-		 */
-		@Override
-		public final FileVisitResult preVisitDirectory(java.nio.file.Path dir, BasicFileAttributes attrs) throws IOException {
-			final java.nio.file.Path targetDirectory = mTarget.resolve(mSource.relativize(dir));
-		    try {Files.copy(dir, targetDirectory);}
-		    catch (FileAlreadyExistsException e) {if (!Files.isDirectory(targetDirectory))throw e;}
-		    return FileVisitResult.CONTINUE;
-		}
-
-	}
-	
-	/**
-	 * The simple file visitor for temp-dir delete.
-	 * 
-	 * @author Nikitenko Gleb
-	 */
-	private static final class DeleteFilesVisitor extends SimpleFileVisitor<java.nio.file.Path> {
-		
-		/* (non-Javadoc)
-		 * @see java.nio.file.SimpleFileVisitor
-		 * #visitFile(java.lang.Object, java.nio.file.attribute.BasicFileAttributes)
-		 */
-		@Override
-		public final FileVisitResult visitFile(java.nio.file.Path file, BasicFileAttributes attrs) throws IOException {
-			//System.out.println("visit file - " + file.getFileName().toString() + " - " + file.toFile().delete());
-			while (!file.toFile().delete()) {try {Thread.sleep(200);} catch (InterruptedException e) {}}
-			return FileVisitResult.CONTINUE;
-		}
-		
-		/* (non-Javadoc)
-		 * @see java.nio.file.SimpleFileVisitor
-		 * #postVisitDirectory(java.lang.Object, java.io.IOException)
-		 */
-		@Override
-		public FileVisitResult postVisitDirectory(java.nio.file.Path dir, IOException exc) throws IOException {
-			if(exc != null) throw exc;
-			return FileVisitResult.CONTINUE;
-		}
-		
-		@Override
-		public FileVisitResult visitFileFailed(java.nio.file.Path file, IOException exc) throws IOException {
-	        exc.printStackTrace();
-	        return FileVisitResult.CONTINUE;
-		}
-	}
-	
-	/**
-	 * Custom Config Session Factory.
-	 * 
-	 * @author Nikitenko Gleb
-	 */
-	private class SSHConfigSessionFactory extends JschConfigSessionFactory {
-		
-		/**	Session password. */
-		private final String mPassword;
-		/**	Path to private ssh key. */
-		private final String mPrivateKeyPath;
-
-		/**	Creates new ssh config session factory. */
-		SSHConfigSessionFactory(String password, String keyPath) {mPassword = password; mPrivateKeyPath = keyPath;}
-
-		/* (non-Javadoc)
-		 * @see org.eclipse.jgit.transport.JschConfigSessionFactory
-		 * #configure(org.eclipse.jgit.transport.OpenSshConfig.Host, com.jcraft.jsch.Session)
-		 */
-		@Override
-		protected final void configure(Host host, Session session) {
-			session.setPassword(mPassword);
-		}
-		
-		/* (non-Javadoc)
-		 * @see org.eclipse.jgit.transport.JschConfigSessionFactory
-		 * #createDefaultJSch(org.eclipse.jgit.util.FS)
-		 */
-		@Override
-		protected final JSch createDefaultJSch(FS fs) throws JSchException {
-			final JSch defaultJSch = super.createDefaultJSch(fs);
-			defaultJSch.addIdentity(mPrivateKeyPath);
-			return defaultJSch;
-		}
-
-	}
-
-	/**
-	 * Custom SSH Config Transport
-	 * 
-	 * @author Nikitenko Gleb
-	 */
-	private final class SSHConfigCallback implements TransportConfigCallback {
-		
-		/**	SSH Session Factory. */
-		private final SSHConfigSessionFactory mSessionFactory;
-		
-		/**
-		 * Creates new SSH Config callback.
-		 * 
-		 * @param password ssh password
-		 * @param keyPath path to private ssh key.
-		 */
-		SSHConfigCallback(String password, String keyPath) {
-			mSessionFactory = new SSHConfigSessionFactory(password, keyPath);
-		}
-
-		/* (non-Javadoc)
-		 * @see org.eclipse.jgit.api.TransportConfigCallback
-		 * #configure(org.eclipse.jgit.transport.Transport)
-		 */
-		@Override
-		public final void configure(Transport transport) {
-			((SshTransport)transport).setSshSessionFactory(mSessionFactory);
-		}
-	
-	}
-
 
 }
