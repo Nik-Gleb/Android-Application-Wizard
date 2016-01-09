@@ -1,0 +1,13 @@
+/*
+ *  package-info.java
+ *  ${projectName}
+${license} */
+/**
+ * Utils package.
+ * This package contains utils classes, helpers, etc.. 
+ *
+ * @author ${author}
+ * @version 1.0
+ * @since ${date}
+ */
+package ${packageName}.utils;

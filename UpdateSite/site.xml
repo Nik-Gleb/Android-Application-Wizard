@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<site>
+   <description name="Android Application Wizard" url="http://nikitenkogleb.royalwebhosting.net/updatesite">
+      Home Update Site. For store custom eclipse plugins.
+   </description>
+   <feature url="features/ru.nikitenkogleb.androidtools_0.0.0.jar" id="ru.nikitenkogleb.androidtools" version="0.0.0">
+      <category name="ru.nikitenkogleb.androidtools"/>
+   </feature>
+   <category-def name="ru.nikitenkogleb.androidtools" label="Android Tools">
+      <description>
+         Small, fast, effective android developer utilites
+      </description>
+   </category-def>
+</site>

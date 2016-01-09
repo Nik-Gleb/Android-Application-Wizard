@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<project default="javadoc">
+	<property file="local.properties" />
+    <target name="javadoc">
+        <javadoc access="private"
+        	additionalparam="-encoding UTF-8 -charset UTF-8 -docencoding UTF-8 -tag TargetApi:a:'Android tag'"
+        	author="true"
+        	classpath="${sdk.dir}/platforms/android-23/android.jar"
+        	linkoffline="http://d.android.com/reference ${sdk.dir}/docs/reference"
+        	destdir="build/doc"
+        	doctitle="${projectName} Api Reference"
+        	nodeprecated="false"
+        	nodeprecatedlist="false"
+        	noindex="false"
+        	nonavbar="false"
+        	notree="false"
+        	packagenames="${packageName},${packageName}.app,${packageName}.utils"
+        	source="1.8"
+        	sourcefiles="src/${packagePath}/App.java,src/${packagePath}/package-info.java"
+        	sourcepath="src;gen"
+        	splitindex="true"
+        	use="true"
+        	version="true"/>
+    </target>
+</project>
