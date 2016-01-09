@@ -3,7 +3,7 @@ Bundle-ManifestVersion: 2
 Bundle-Name: New Application Wizard
 Singleton: true
 Bundle-SymbolicName: ru.nikitenkogleb.androidtools.newappwizard; singleton:=true
-Bundle-Version: 0.1.2
+Bundle-Version: 1.0.0
 Bundle-Activator: ru.nikitenkogleb.androidtools.newappwizard.Activator
 Bundle-Vendor: Nikitenko Gleb
 Bundle-RequiredExecutionEnvironment: JavaSE-1.8

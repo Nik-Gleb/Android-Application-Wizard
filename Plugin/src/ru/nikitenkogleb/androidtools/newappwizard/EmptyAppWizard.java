@@ -257,10 +257,15 @@ public class EmptyAppWizard extends Wizard implements INewWizard,
 					gitRepository, proj.getLocation().toString(), tempProject, gitBranch);
 			
 			if (gitSupport.isSuccessful()) {
-				description = proj.getDescription();
-				description.setComment(extractComments(new File(proj.getLocation().toString(), "README.md")));
-				proj.setDescription(description, monitor);
-				license = extractLicense(new File(proj.getLocation().toString(), "LICENSE"));
+				final File readmeFile = new File(proj.getLocation().toString(), "README.md");
+				if (readmeFile.exists()) {
+					description = proj.getDescription();
+					description.setComment(extractComments(readmeFile));
+					proj.setDescription(description, monitor);
+				}
+				final File licenseFile = new File(proj.getLocation().toString(), "LICENSE");
+				if (licenseFile.exists())
+					license = extractLicense(licenseFile);
 			}
 			
 			
@@ -280,10 +285,10 @@ public class EmptyAppWizard extends Wizard implements INewWizard,
 					KEY_PROJECT_NAME, projectName,
 					container, monitor);
 			addFileToProject("build-evolution.bat", "build-evolution.bat", container, monitor);
-			addFileToProject("build-release.bat", "build-release.bat",
+			/*addFileToProject("build-release.bat", "build-release.bat",
 					KEY_PROJECT_NAME, projectName,
 					container, monitor);
-			addFileToProject("build.xml", "build.xml",
+			*/addFileToProject("build.xml", "build.xml",
 					KEY_PROJECT_NAME, projectName,
 					container, monitor);
 
@@ -523,8 +528,6 @@ public class EmptyAppWizard extends Wizard implements INewWizard,
 	private final void addFileToProject(String filePath, InputStream contentStream,
 			IContainer project, IProgressMonitor monitor)
 			throws CoreException {
-		try {logln(filePath + " - " + contentStream.available());}
-		catch (IOException e) {logln(e.getLocalizedMessage());}
 		project.getFile(new Path(filePath)).create(contentStream, true, monitor);
 	}
 	
@@ -736,6 +739,7 @@ public class EmptyAppWizard extends Wizard implements INewWizard,
 	}
 
 	/** @param message the message for log to new line */
+	@SuppressWarnings("unused")
 	private final void logln(String message) {
 		if (mMessageConsoleStream == null) return;
 		mMessageConsoleStream.println(message);

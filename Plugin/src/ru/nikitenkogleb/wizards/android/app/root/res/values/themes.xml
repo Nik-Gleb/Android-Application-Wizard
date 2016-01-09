@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources xmlns:android="http://schemas.android.com/apk/res/android">
-
-    <!-- ${projectName} Application Base Theme. -->
-    <style name="Theme.${projectName}" parent="android:Theme.Holo.Light">
-        <item name="android:actionBarStyle">@style/Widget.${projectName}.ActionBarStyle</item>
-    </style>
-
-</resources>

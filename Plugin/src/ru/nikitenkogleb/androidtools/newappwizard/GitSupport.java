@@ -13,8 +13,10 @@ import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.PushCommand;
 import org.eclipse.jgit.api.TransportConfigCallback;
 import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.api.errors.RefNotFoundException;
 import org.eclipse.jgit.errors.UnsupportedCredentialItem;
 import org.eclipse.jgit.internal.storage.file.FileRepository;
+import org.eclipse.jgit.lib.StoredConfig;
 import org.eclipse.jgit.transport.CredentialItem;
 import org.eclipse.jgit.transport.CredentialsProviderUserInfo;
 import org.eclipse.jgit.transport.JschConfigSessionFactory;
@@ -70,7 +72,15 @@ final class GitSupport {
 				cloneCommand.setCredentialsProvider(mHttpsCredentialsProvider);
 			
 			final Git mGit = cloneCommand.call();
-			mGit.checkout().setCreateBranch(true).setName(initBranch).call();
+			
+			try {mGit.checkout().setCreateBranch(true).setName(initBranch).call();}
+			catch (RefNotFoundException e) {
+				e.printStackTrace();
+				final StoredConfig config = mGit.getRepository().getConfig();
+				config.setString("remote", "origin", "url", repository);
+				config.save();
+			}
+			
 			mGit.close();
 			
 			move(new File(tempFolder + "/.git"), new File(projectPath + "/.git"));
@@ -94,6 +104,7 @@ final class GitSupport {
 	 * @param dst	destination directory
 	 */
 	private final void move(File src, File dst) throws IOException {
+		if (!src.exists()) return;
 		if (src.isDirectory()) {
 			if (!dst.exists()) dst.mkdir();
 			final String[] childrens = src.list();
